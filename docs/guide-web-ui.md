@@ -1,4 +1,4 @@
-# MiniCPM51BModel: the admin web UI
+# MiniCPM52BModel: the admin web UI
 
 One page, `/admin/`, for tokens and Ollama CPU threads. It is the same for every way of running the service (Docker
 on the same device, Docker on a deployment device, no Docker). Only the address differs:

@@ -25,7 +25,7 @@ services:
     image: ollama/ollama:latest
     environment:
       OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["ollama", "pull", "${MINICPM_MODEL:-hf.co/openbmb/MiniCPM5-1B-GGUF:Q4_K_M}"]
+    entrypoint: ["ollama", "pull", "${MINICPM_MODEL:-hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M}"]
     depends_on:
       ollama:
         condition: service_healthy
@@ -36,7 +36,7 @@ services:
     restart: unless-stopped
     environment:
       MINICPM_ADMIN_PASSWORD: ${MINICPM_ADMIN_PASSWORD:-}
-      MINICPM_MODEL: ${MINICPM_MODEL:-hf.co/openbmb/MiniCPM5-1B-GGUF:Q4_K_M}
+      MINICPM_MODEL: ${MINICPM_MODEL:-hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M}
       OLLAMA_URL: http://ollama:11434
       MINICPM_NUM_THREAD: ${MINICPM_NUM_THREAD:-4}
       MINICPM_REPLICAS: ${MINICPM_REPLICAS:-1}  # shown read-only on /admin/

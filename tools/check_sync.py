@@ -1,6 +1,6 @@
 """Fails when the admin page or token store drifts from the sibling service.
 
-LayaModel and MiniCPM51BModel keep copies of web/index.html and src/tokens.py that differ only in
+LayaModel and MiniCPM52BModel keep copies of web/index.html and src/tokens.py that differ only in
 the lines listed in ALLOWED. Run from either repo: py tools/check_sync.py
 """
 import difflib
@@ -18,7 +18,7 @@ def lines(path: Path) -> list[str]:
 
 def main() -> int:
     here = Path(__file__).resolve().parent.parent
-    other = here.parent / ("MiniCPM51BModel" if here.name == "LayaModel" else "LayaModel")
+    other = here.parent / ("MiniCPM52BModel" if here.name == "LayaModel" else "LayaModel")
     if not other.is_dir():
         print(f"skip: sibling {other.name} not found")
         return 0

@@ -7,7 +7,7 @@ rem The service runs from its own docker-compose.yml in the deploy folder, with 
 rem Override the target: set DEPLOY_HOST / DEPLOY_DIR / DEPLOY_WEB_PORT before running.
 setlocal enabledelayedexpansion
 if not defined DEPLOY_HOST set "DEPLOY_HOST=user@your-server.local"
-if not defined DEPLOY_DIR set "DEPLOY_DIR=/media/ZimaOS-HD/Apps/MiniCPM51BModel"
+if not defined DEPLOY_DIR set "DEPLOY_DIR=/media/ZimaOS-HD/Apps/MiniCPM52BModel"
 if not defined DEPLOY_WEB_PORT set "DEPLOY_WEB_PORT=7681"
 set "ROOT=%~dp0.."
 
@@ -72,7 +72,7 @@ echo Done.
 call :reminder ".env is on the server. In the web terminal:" "docker compose up -d --build" "(run git pull here first if the code changed)"
 exit /b 0
 
-rem :add <path relative to the MiniCPM51BModel root, same path on the server>
+rem :add <path relative to the MiniCPM52BModel root, same path on the server>
 :add
 if not exist "%ROOT%\%~1" (echo skip    %~1 ^(missing locally^) & exit /b 0)
 >>"%LIST%" echo %~1

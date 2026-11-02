@@ -1,6 +1,6 @@
 [project]
 name = "minicpm-service"
-description = "One HTTP service in front of Ollama that serves MiniCPM5-1B to every project"
+description = "One HTTP service in front of Ollama that serves MiniCPM5-2B to every project"
 version = "1.0.0"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -11,8 +11,11 @@ dependencies = [
     "httpx>=0.27",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = ["pytest>=8.0", "playwright>=1.40"]
+
+[tool.uv]
+package = false  # runs from src/, only the dependencies are installed
 
 [build-system]
 requires = ["hatchling"]

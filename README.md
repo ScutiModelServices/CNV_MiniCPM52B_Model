@@ -1,6 +1,6 @@
-# MiniCPM51BModel
+# MiniCPM52BModel
 
-The one place MiniCPM5-1B is served. It sits in front of Ollama; projects send it turns over HTTP instead of
+The one place MiniCPM5-2B is served. It sits in front of Ollama; projects send it turns over HTTP instead of
 talking to Ollama or loading the model themselves. It is built as a tool-calling model: one call is one model turn,
 and the caller runs the tools and the loop.
 
@@ -32,7 +32,7 @@ refused the options), 502 Ollama down, model missing or invalid JSON under a `sc
 Local (Ollama installed): pull the model once, then start the service.
 
 ```bash
-ollama pull hf.co/openbmb/MiniCPM5-1B-GGUF:Q4_K_M
+ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M
 run.bat
 ```
 
@@ -51,20 +51,20 @@ changing the replica count, run `docker compose restart minicpm_lb`.
 ## Settings
 
 `MINICPM_HOST` (127.0.0.1), `MINICPM_PORT` (9130), `MINICPM_ADMIN_PASSWORD` (unlocks `/admin/`; empty = no auth), `MINICPM_MODEL`
-(`hf.co/openbmb/MiniCPM5-1B-GGUF:Q4_K_M`; `:Q8_0` and `:F16` also exist), `OLLAMA_URL` (http://127.0.0.1:11434).
+(`hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`; `:Q8_0` and `:F16` also exist), `OLLAMA_URL` (http://127.0.0.1:11434).
 
 ## Test
 
-`pip install -e ".[dev]"` then `pytest`. The tests fake Ollama. A manual check against the real `Q4_K_M` model got correct tool calls for simple tools
+`uv sync` then `uv run pytest`. The tests fake Ollama. A manual check against the real `Q4_K_M` model got correct tool calls for simple tools
 (weather, add) and a plain refusal when no tool fit.
 
 ## License
 
-The service code is MIT. It does not ship model weights: Ollama downloads MiniCPM5-1B from
-`openbmb/MiniCPM5-1B-GGUF`, which has its own license; read it before redistributing the weights. See [LICENSE](LICENSE) and [CHANGELOG.md](CHANGELOG.md).
+The service code is MIT. It does not ship model weights: Ollama downloads MiniCPM5-2B from
+`openbmb/MiniCPM5-2B-GGUF`, which has its own license; read it before redistributing the weights. See [LICENSE](LICENSE) and [CHANGELOG.md](CHANGELOG.md).
 
 ### Releasing
 
 A plain publish (`tools\deploy.bat` option 1) only updates the `live` branch, so it is fine for test deploys. A release is a separate step: set `VERSION` (and `pyproject.toml` where it has a version, to the same number), commit, then run `tools\deploy.bat` option R or `py tools\publish_live.py --release`. That publishes to `live` and tags the `main` commit `vX.Y.Z` and the live commit `live-vX.Y.Z`. A version already released with different live files is refused, so bump `VERSION`. While a version is not officially released yet, add `--replace` to move its tags.
 
-`tools\make_zip.bat` then builds `zip_versions\MiniCPM51BModel-<VERSION>.zip` (no `tools/`, no git-ignored files, no older ZIPs; `.env.example` is included) and opens GitHub's new-release page for the tag.
+`tools\make_zip.bat` then builds `zip_versions\MiniCPM52BModel-<VERSION>.zip` (no `tools/`, no git-ignored files, no older ZIPs; `.env.example` is included) and opens GitHub's new-release page for the tag.

@@ -1,7 +1,7 @@
-# MiniCPM51BModel: Docker on a deployment device (ZimaOS server)
+# MiniCPM52BModel: Docker on a deployment device (ZimaOS server)
 
 Run the service on a separate always-on box (default `user@your-server.local`, folder
-`/media/ZimaOS-HD/Apps/MiniCPM51BModel`). It is a self-contained compose stack (`ollama`, `minicpm_pull`, `minicpm`,
+`/media/ZimaOS-HD/Apps/MiniCPM52BModel`). It is a self-contained compose stack (`ollama`, `minicpm_pull`, `minicpm`,
 `minicpm_lb`) with no Citadel dependency.
 
 ## Requirements on the box
@@ -9,7 +9,7 @@ Run the service on a separate always-on box (default `user@your-server.local`, f
 - Internet on the first start (model pull, about 1 GB). Disk for the `ollama` volume.
 
 ## 1. Publish the code (from your PC)
-Run `MiniCPM51BModel\tools\deploy.bat`:
+Run `MiniCPM52BModel\tools\deploy.bat`:
 
 | Option | Does |
 |---|---|
@@ -25,8 +25,8 @@ Override the target with `DEPLOY_HOST`, `DEPLOY_DIR`, `DEPLOY_WEB_PORT`. Commit 
 ## 2. First-time setup on the box
 ```bash
 mkdir -p /media/ZimaOS-HD/Apps
-git clone -b live <your-repo-url> /media/ZimaOS-HD/Apps/MiniCPM51BModel
-cd /media/ZimaOS-HD/Apps/MiniCPM51BModel
+git clone -b live <your-repo-url> /media/ZimaOS-HD/Apps/MiniCPM52BModel
+cd /media/ZimaOS-HD/Apps/MiniCPM52BModel
 ```
 `.env` (deploy option 2 copies yours, or `cp .env.example .env`):
 - `MINICPM_ADMIN_PASSWORD`: set a real one.
@@ -51,7 +51,7 @@ curl http://127.0.0.1:9130/health
 
 ## Updating
 ```bash
-cd /media/ZimaOS-HD/Apps/MiniCPM51BModel
+cd /media/ZimaOS-HD/Apps/MiniCPM52BModel
 git pull
 docker compose up -d --build
 docker compose restart minicpm_lb

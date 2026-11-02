@@ -1,4 +1,4 @@
-"""HTTP face of MiniCPM5-1B (served by Ollama).
+"""HTTP face of MiniCPM5-2B (served by Ollama).
 
 POST /v1/chat {"messages", "tools", "schema", "thinking", "temperature", "max_tokens"} runs one model turn. With
 `tools` the model may answer with `tool_calls` for the caller to run; the caller appends the results as `tool`
@@ -26,7 +26,7 @@ from tokens import TokenStore
 
 _log = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "hf.co/openbmb/MiniCPM5-1B-GGUF:Q4_K_M"
+DEFAULT_MODEL = "hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M"
 
 
 class ToolCall(BaseModel):
@@ -108,7 +108,7 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
     if threads:
         client.num_thread = int(threads)
 
-    app = FastAPI(title="MiniCPM5-1B service", lifespan=lifespan)
+    app = FastAPI(title="MiniCPM5-2B service", lifespan=lifespan)
 
     @app.get("/health")
     async def health() -> dict[str, Any]:

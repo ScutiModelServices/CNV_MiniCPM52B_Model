@@ -1,4 +1,4 @@
-# MiniCPM51BModel: without Docker, same device
+# MiniCPM52BModel: without Docker, same device
 
 Two processes: Ollama (holds the model) and the MiniCPM service (`src/app.py`, port 9130).
 
@@ -11,21 +11,19 @@ Two processes: Ollama (holds the model) and the MiniCPM service (`src/app.py`, p
 Make sure Ollama is running (the Windows/macOS app starts it; on Linux run `ollama serve`). It listens on
 `127.0.0.1:11434`. Then:
 ```bash
-ollama pull hf.co/openbmb/MiniCPM5-1B-GGUF:Q4_K_M
+ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M
 ollama list
 ```
 (`:Q8_0` and `:F16` also exist; if you use one, set `MINICPM_MODEL` to the same tag.)
 
 ## 2. The service
-Windows: double-click `run.bat` (first run creates `.venv_minicpm` and installs the package, then starts the service).
+Windows: double-click `run.bat` (runs `uv sync` to create or update `.venv`, then starts the service). Needs uv: `python -m pip install uv`.
 
 Linux / macOS:
 ```bash
-cd MiniCPM51BModel
-python3 -m venv .venv_minicpm
-source .venv_minicpm/bin/activate
-pip install -e ".[dev]"
-python src/app.py
+cd MiniCPM52BModel
+uv sync
+uv run python src/app.py
 ```
 
 ## Settings
@@ -36,7 +34,7 @@ The service reads the real environment, **not** `.env`. Set before starting:
 | `MINICPM_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` only if other devices need it). |
 | `MINICPM_PORT` | `9130` | Port. |
 | `MINICPM_ADMIN_PASSWORD` | empty | Unlocks `/admin/` and requires tokens on all calls except `/health`. Empty = no auth. |
-| `MINICPM_MODEL` | `hf.co/openbmb/MiniCPM5-1B-GGUF:Q4_K_M` | Must match the tag you pulled. |
+| `MINICPM_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Must match the tag you pulled. |
 | `OLLAMA_URL` | `http://127.0.0.1:11434` | Where Ollama is. |
 | `MINICPM_NUM_THREAD` | Ollama decides | CPU threads per request. |
 
@@ -66,4 +64,4 @@ together: both use port 9130.
 | Docker callers cannot reach it | Start with `MINICPM_HOST=0.0.0.0` and use `http://host.docker.internal:9130`. |
 
 ## Tests
-`pytest` inside the venv (they fake Ollama).
+`uv run pytest` (they fake Ollama).
