@@ -122,6 +122,10 @@ td time { font-variant-numeric: tabular-nums; }
 .thread-label { margin-top: 18px; }
 .saved { color: var(--accent); font-size: .85em; min-height: 1.55em; margin-top: 6px; }
 .hint { padding: 0 4px; overflow-wrap: anywhere; }
+.update-list { list-style: none; margin: 14px 0; padding: 0; }
+.update-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .85em; overflow-wrap: anywhere; }
+.update-list .new { color: var(--warning); font-weight: 600; }
+.update-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
 dialog { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 24px; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--surface); color: var(--text); }
 dialog::backdrop { background: var(--backdrop); }
 dialog h2 { margin-bottom: 10px; }
@@ -226,6 +230,14 @@ dialog p { overflow-wrap: anywhere; }
       <p id="saved" class="saved" role="status"></p>
       <p id="threads-error" class="error" role="alert"></p>
     </section>
+    <section id="updates-card" class="card" aria-labelledby="updates-title" hidden>
+      <div class="section-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14"/></svg><h2 id="updates-title">Updates</h2></div>
+      <p class="description">Looks for a newer package on PyPI and newer weights on the Hugging Face Hub.</p>
+      <ul id="update-list" class="update-list"></ul>
+      <div class="update-actions"><button id="check-updates" type="button">Check now</button><button id="update-weights" class="primary" type="button" hidden>Download new weights</button></div>
+      <p id="update-note" class="description" role="status"></p>
+      <p id="updates-error" class="error" role="alert"></p>
+    </section>
     <p id="workers" class="hint"></p>
   </section>
 </div>
@@ -238,7 +250,7 @@ dialog p { overflow-wrap: anywhere; }
 </dialog>
 <script>
 // Per-service configuration. The rest of this page is shared verbatim.
-const CONFIG = {title: "MiniCPM52BModel", address: location.origin, threadLabel: "Ollama CPU threads", threadField: "num_thread", adminEnv: "MINICPM_ADMIN_PASSWORD", replicasEnv: "MINICPM_REPLICAS", extraTile: {label: "Ollama parallel requests", field: "ollama_parallel"}};
+const CONFIG = {title: "MiniCPM52BModel", address: location.origin, threadLabel: "Ollama CPU threads", threadField: "num_thread", adminEnv: "MINICPM_ADMIN_PASSWORD", replicasEnv: "MINICPM_REPLICAS", extraTile: {label: "Ollama parallel requests", field: "ollama_parallel"}, updates: false};
 
 const $ = id => document.getElementById(id);
 const storageKey = CONFIG.title + ":admin";
@@ -262,6 +274,7 @@ if (CONFIG.extraTile) {
   $("extra-tile").hidden = false;
   $("extra-label").textContent = CONFIG.extraTile.label;
 }
+$("updates-card").hidden = !CONFIG.updates;
 $("theme").onclick = () => {
   theme = ["system", "light", "dark"][(["system", "light", "dark"].indexOf(theme) + 1) % 3];
   try { localStorage.setItem("admin-theme", theme); } catch {}
@@ -298,7 +311,9 @@ function signOut(focus = true) {
   $("name").value = "";
   $("count").value = "";
   $("saved").textContent = "";
-  for (const id of ["login-error", "page-error", "token-error", "threads-error", "revoke-error"]) $(id).textContent = "";
+  $("update-list").replaceChildren();
+  $("update-note").textContent = "";
+  for (const id of ["login-error", "page-error", "token-error", "threads-error", "revoke-error", "updates-error"]) $(id).textContent = "";
   initializedThreads = false;
   if (focus) $("admin").focus();
 }
@@ -312,14 +327,14 @@ function report(error, target) {
     $(target).textContent = error.message;
   }
 }
-async function call(method, path, body) {
+async function call(method, path, body, timeout = 10000) {
   const activeSession = session;
   let response;
   try {
     response = await fetch("../admin/" + path, {
       method, headers: {"X-Internal-Token": admin, "Content-Type": "application/json"},
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.any([activeSession.signal, AbortSignal.timeout(10000)])
+      signal: AbortSignal.any([activeSession.signal, AbortSignal.timeout(timeout)])
     });
   } catch (error) {
     if (activeSession.signal.aborted) throw new DOMException("Signed out", "AbortError");
@@ -328,7 +343,8 @@ async function call(method, path, body) {
   const data = await response.json().catch(() => ({}));
   if (activeSession.signal.aborted) throw new DOMException("Signed out", "AbortError");
   if (!response.ok) {
-    const message = response.status === 401
+    const message = response.status === 502 && typeof data.detail === "string" ? data.detail
+      : response.status === 401
       ? "Wrong admin password. Check the password and that " + CONFIG.adminEnv + " is set on the server."
       : "Request failed (" + response.status + "). Check the service and try again.";
     const error = new Error(message);
@@ -439,6 +455,29 @@ async function refreshHealth() {
     initializedThreads = true;
   }
 }
+function short(sha) { return sha ? sha.slice(0, 7) : "none"; }
+function renderUpdates(data) {
+  const rows = [];
+  if (data.package) rows.push([data.package.name + " package", data.package.installed + (data.package.update ? " → " + data.package.latest : ""), data.package.update]);
+  for (const item of data.weights || []) rows.push([item.repo, short(item.cached) + (item.update ? " → " + short(item.latest) : ""), item.update]);
+  $("update-list").replaceChildren(...rows.map(([name, value, newer]) => {
+    const li = document.createElement("li"), left = document.createElement("span"), right = document.createElement("span");
+    left.textContent = name;
+    right.textContent = value;
+    right.className = "mono" + (newer ? " new" : "");
+    li.append(left, right);
+    return li;
+  }));
+  $("update-weights").hidden = !(data.weights || []).some(item => item.update);
+  $("check-updates").disabled = !data.enabled;
+  $("update-note").textContent = !data.enabled ? "Updates are off while the service runs offline."
+    : data.error ? "Last check failed: " + data.error
+    : !data.checked_at ? "Not checked yet."
+    : "Checked " + relative(data.checked_at) + "." + (data.package && data.package.update ? " A newer package needs uv lock --upgrade-package " + data.package.name + ", then a rebuild." : "");
+}
+async function refreshUpdates() {
+  if (CONFIG.updates) renderUpdates(await call("GET", "updates"));
+}
 async function pollStatus() {
   if (polling || !admin) return;
   polling = true;
@@ -446,7 +485,8 @@ async function pollStatus() {
     await Promise.all([
       refreshHealth(),
       refreshTokens().catch(error => report(error, "page-error")),
-      refreshWorkers().catch(error => report(error, "page-error"))
+      refreshWorkers().catch(error => report(error, "page-error")),
+      refreshUpdates().catch(error => report(error, "page-error"))
     ]);
   } finally { polling = false; }
 }
@@ -461,7 +501,7 @@ async function signIn(password) {
     $("signin").hidden = true;
     $("dashboard").hidden = false;
     $("signout").focus();
-    await Promise.all([refreshHealth(), refreshWorkers().catch(error => report(error, "page-error"))]);
+    await Promise.all([refreshHealth(), refreshWorkers().catch(error => report(error, "page-error")), refreshUpdates().catch(error => report(error, "page-error"))]);
     if (admin) poll = setInterval(pollStatus, 10000);
   } catch (error) {
     try { sessionStorage.removeItem(storageKey); } catch {}
@@ -531,6 +571,22 @@ $("threads").onsubmit = async event => {
     savedTimer = setTimeout(() => { $("saved").textContent = ""; }, 3000);
   } catch (error) { report(error, "threads-error"); }
   finally { busy("apply", false); }
+};
+$("check-updates").onclick = async () => {
+  $("updates-error").textContent = "";
+  busy("check-updates", true);
+  try { renderUpdates(await call("POST", "updates/check", undefined, 60000)); }
+  catch (error) { report(error, "updates-error"); }
+  finally { busy("check-updates", false); }
+};
+$("update-weights").onclick = async () => {
+  $("updates-error").textContent = "";
+  busy("update-weights", true);
+  try {
+    renderUpdates(await call("POST", "updates/weights", undefined, 1800000));
+    $("update-note").textContent += " Weights downloaded; this replica loaded them. Restart the other replicas to load them too.";
+  } catch (error) { report(error, "updates-error"); }
+  finally { busy("update-weights", false); }
 };
 $("cancel-revoke").onclick = () => $("revoke-dialog").close();
 $("revoke-dialog").onclick = event => {
