@@ -35,6 +35,7 @@ The service reads the real environment, **not** `.env`. Set before starting:
 | `MINICPM_PORT` | `9130` | Port. |
 | `MINICPM_ADMIN_PASSWORD` | empty | Unlocks `/admin/` and requires tokens on all calls except `/health`. Empty = no auth. |
 | `MINICPM_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Must match the tag you pulled. |
+| `MINICPM_PROJECT_PREFIX` | `minicpm-` | Prefix for project models; selection works when unset. |
 | `OLLAMA_URL` | `http://127.0.0.1:11434` | Where Ollama is. |
 | `MINICPM_NUM_THREAD` | Ollama decides | CPU threads per request. |
 
@@ -51,7 +52,27 @@ curl -X POST http://127.0.0.1:9130/v1/chat -H "Content-Type: application/json" -
 ```
 (Add `-H "X-Internal-Token: <token>"` if a password is set; make tokens at `http://127.0.0.1:9130/admin/`.)
 
+## Registering a fine-tuned project model
+
+Copy the fine-tuned GGUF to the Ollama host as `file.gguf`. Beside it create `Modelfile` containing:
+
+```dockerfile
+FROM ./file.gguf
+```
+
+In that folder run `ollama create minicpm-my-project -f Modelfile`. Send `"project":"my-project"`
+in `/v1/chat`. Project names match `^[a-z0-9][a-z0-9_-]{0,47}$`; invalid values return 422. Use your
+`MINICPM_PROJECT_PREFIX` if changed; its unset default is `minicpm-`. An absent project uses the base.
+An uninstalled project also uses the base with `fallback: true`; replies report the selected `model`.
+`/health` adds installed `project_models`, while `ready` still checks the base model. A model made with
+`ollama create` is found at once (a miss re-asks Ollama); if the lookup fails, the base is used with `fallback: true`.
+
+CPU model changes may unload and reload weights, adding latency. Set `OLLAMA_MAX_LOADED_MODELS=1` in
+the Ollama process environment and restart Ollama to limit resident models; increase it if RAM permits.
+Setting this only on the Python service has no effect on Ollama.
+
 ## Stop
+
 Ctrl+C in the service terminal. Quit Ollama separately if you want the RAM back. Do not run this and the Docker stack
 together: both use port 9130.
 

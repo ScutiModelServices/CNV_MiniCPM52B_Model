@@ -39,7 +39,28 @@ nginx.
   network from the caller's compose file (`external: true`) and use `http://minicpm_lb:9130`. The service itself
   never references its callers.
 
+## Registering a fine-tuned project model
+
+Copy your GGUF to this host as `file.gguf`. Beside it, create `Modelfile` containing `FROM ./file.gguf`, then:
+
+```bash
+docker compose cp file.gguf ollama:/tmp/file.gguf
+docker compose cp Modelfile ollama:/tmp/Modelfile
+docker compose exec -w /tmp ollama ollama create minicpm-my-project -f Modelfile
+```
+
+Send `"project":"my-project"` with chat requests. Names match `^[a-z0-9][a-z0-9_-]{0,47}$`; invalid names
+return 422. `MINICPM_PROJECT_PREFIX` defaults to `minicpm-` when unset; use that prefix in the create command.
+An absent project uses the base model. A missing project model uses the base with `fallback: true`;
+`model` reports the selection. `/health` adds `project_models`, while `ready` still checks the base model.
+A model made with `ollama create` is found at once (a miss re-asks Ollama); if the lookup fails, the base is used
+with `fallback: true`.
+
+On CPU, model changes can reload weights and add latency. Compose sets `OLLAMA_MAX_LOADED_MODELS=1`;
+increase this on Ollama only if RAM permits keeping more models loaded.
+
 ## Daily use
+
 ```bash
 docker compose ps
 docker compose logs -f minicpm ollama

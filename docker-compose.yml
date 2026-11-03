@@ -11,6 +11,7 @@ services:
     restart: unless-stopped
     environment:
       OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-2}
+      OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
     volumes:
       - ollama:/root/.ollama
     healthcheck:
@@ -37,6 +38,7 @@ services:
     environment:
       MINICPM_ADMIN_PASSWORD: ${MINICPM_ADMIN_PASSWORD:-}
       MINICPM_MODEL: ${MINICPM_MODEL:-hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M}
+      MINICPM_PROJECT_PREFIX: ${MINICPM_PROJECT_PREFIX:-minicpm-}
       OLLAMA_URL: http://ollama:11434
       MINICPM_UPDATE_CHECK_HOURS: ${MINICPM_UPDATE_CHECK_HOURS:-6}
       MINICPM_WARM: ${MINICPM_WARM:-1}

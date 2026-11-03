@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
+
+- Optional validated `project` on `/v1/chat` selects an installed `MINICPM_PROJECT_PREFIX` model (default `minicpm-`), otherwise falls back to the configured base model.
+- Chat reports the selected `model` and `fallback`; `/health` adds installed `project_models` while readiness still checks the base model.
+- Cache successful Ollama inventory lookups for 30 seconds with concurrent refresh protection. A project missing from the
+  cache re-asks Ollama (at most every 2 seconds); `/health` always asks. A failed lookup serves the base with `fallback: true`.
+- Document GGUF registration, CPU model reloads and `OLLAMA_MAX_LOADED_MODELS`; Compose forwards the prefix and defaults to one loaded model.
 
 - Load saved CPU thread settings in `main()`, matching LayaModel and preserving injected clients in tests.
 - Shared admin health rendering uses backend readiness and model fields while retaining each service's display.

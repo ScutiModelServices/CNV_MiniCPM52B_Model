@@ -133,7 +133,7 @@ def test_request_is_validated():
 
 def test_health_reports_model_readiness():
     ready = client(lambda request: httpx.Response(200, json={"models": [{"name": "m:latest"}]}))
-    assert ready.get("/health").json() == {"status": "ok", "model": "m", "ready": True, "num_thread": None}
+    assert ready.get("/health").json() == {"status": "ok", "model": "m", "ready": True, "num_thread": None, "project_models": []}
     assert client(lambda request: httpx.Response(200, json={"models": []})).get("/health").json()["ready"] is False
 
 

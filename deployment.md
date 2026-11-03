@@ -20,6 +20,8 @@ MiniCPM52BModel serves MiniCPM5-2B over HTTP on port 9130. FastAPI replicas (`mi
 | `MINICPM_HOST` | `127.0.0.1` | Local bind address; the Dockerfile sets `0.0.0.0`. |
 | `MINICPM_ADMIN_PASSWORD` | empty | Unlocks `/admin/` and enables project-token auth. Empty means no auth; use only locally. |
 | `MINICPM_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Model pulled and served by Ollama. |
+| `MINICPM_PROJECT_PREFIX` | `minicpm-` | Prefix for installed project models selected by optional chat `project`. Works when unset. |
+| `OLLAMA_MAX_LOADED_MODELS` | `1` in Compose | Maximum resident models on Ollama; more models need more RAM. For local runs set this on the Ollama process. |
 | `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama endpoint; Compose sets `http://ollama:11434`. |
 | `MINICPM_UPDATE_CHECK_HOURS` | `6` | Check remote model manifests at startup and every N hours; `0` disables automatic checks. Manual checks remain available. |
 | `MINICPM_WARM` | `1` | Load the model at startup with an empty chat and a 30-minute keep-alive. `0` leaves loading to the first request. Failure is logged and does not stop the API. |
@@ -66,7 +68,7 @@ The model volume survives rebuilds. The pull can take time on a slow connection;
 curl http://127.0.0.1:9130/health
 ```
 
-Expect `{"status":"ok","model":"hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M","ready":true,"num_thread":4}`
+Expect `{"status":"ok","model":"hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M","ready":true,"num_thread":4,"project_models":[]}`
 with Compose defaults. `ready` means Ollama answers and has the model pulled, not that a generation has run.
 The endpoint needs no token. HTTP 200 by itself only proves the API is up; inspect `ready` too.
 
@@ -75,6 +77,30 @@ curl -X POST http://127.0.0.1:9130/v1/chat -H "Content-Type: application/json" -
 ```
 
 The example uses shell single-quote syntax (PowerShell or bash). Omit the token header when auth is disabled.
+
+## Registering a fine-tuned project model
+
+Copy `file.gguf` to the deployment host and create a `Modelfile` beside it containing `FROM ./file.gguf`.
+For local Ollama, run `ollama create minicpm-my-project -f Modelfile` in that folder. For Compose:
+
+```bash
+docker compose cp file.gguf ollama:/tmp/file.gguf
+docker compose cp Modelfile ollama:/tmp/Modelfile
+docker compose exec -w /tmp ollama ollama create minicpm-my-project -f Modelfile
+```
+
+The registered model persists in the Ollama volume. Send `"project":"my-project"` in `/v1/chat`;
+project names match `^[a-z0-9][a-z0-9_-]{0,47}$`. Replace `minicpm-` if using `MINICPM_PROJECT_PREFIX`.
+The prefix defaults to `minicpm-` even when unset. No project uses the base model; an uninstalled project
+falls back to the base with `fallback: true`. Replies report the selected `model`; health `project_models`
+lists installed canonical project names, while `ready` still checks the base model. Inventory is cached
+30 seconds per API replica; a project missing from the cache re-asks Ollama (at most every 2 seconds), and `/health`
+always asks. If the lookup fails the request uses the base with `fallback: true`; a real outage still shows as the
+base call's 502/504.
+
+On CPU, switching models can unload and reload weights, adding latency. Compose sets
+`OLLAMA_MAX_LOADED_MODELS=1` to bound resident model count; raise it only with sufficient RAM.
+For local runs set it in Ollama's environment and restart Ollama. Parallel contexts also consume RAM.
 
 ## Scaling
 

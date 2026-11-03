@@ -1,7 +1,7 @@
 [project]
 name = "minicpm-service"
 description = "One HTTP service in front of Ollama that serves MiniCPM5-2B to every project"
-version = "1.0.0"
+version = "1.1.0"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"

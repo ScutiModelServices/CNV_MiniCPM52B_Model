@@ -12,6 +12,7 @@ import hmac
 import json
 import logging
 import os
+import re
 from pathlib import Path
 import time
 from contextlib import asynccontextmanager
@@ -29,6 +30,7 @@ from updates import Updates
 _log = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M"
+PROJECT_PATTERN = r"^[a-z0-9][a-z0-9_-]{0,47}$"
 
 
 class ToolCall(BaseModel):
@@ -56,6 +58,7 @@ class ChatRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     messages: list[Message] = Field(min_length=1, max_length=64)
+    project: str | None = Field(None, pattern=PROJECT_PATTERN)
     tools: list[Tool] | None = Field(None, max_length=32)
     json_schema: dict[str, Any] | None = Field(None, alias="schema")
     thinking: bool = True
@@ -93,6 +96,7 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
     tokens = tokens or TokenStore(os.environ.get("MINICPM_TOKENS_FILE", "tokens.json"))
     client = client or OllamaClient(os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"),
                                     os.environ.get("MINICPM_MODEL", DEFAULT_MODEL))
+    project_prefix = os.environ.get("MINICPM_PROJECT_PREFIX", "minicpm-")
 
     updates = updates or Updates(client.model, cached_sha=lambda: client.cached_sha(), remote_sha=lambda: client.remote_sha(),
                                  download=lambda: client.pull(), unload=lambda: client.unload())
@@ -138,10 +142,30 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
 
     app = FastAPI(title="MiniCPM5-2B service", lifespan=lifespan)
 
+    async def installed(name: str) -> bool:
+        """Is `name` pulled? A miss re-asks Ollama (at most every 2 s) so a model made just now is found.
+        If Ollama cannot list its models, say no: the caller serves the base model, whose own call reports a real outage."""
+        try:
+            for max_age in (30.0, 2.0):
+                names = await client.installed_models(max_age)
+                if name in names or f"{name}:latest" in names:
+                    return True
+        except OllamaError:
+            pass
+        return False
+
     @app.get("/health")
     async def health() -> dict[str, Any]:
-        return {"status": "ok", "model": client.model, "ready": await client.model_ready(),
-                "num_thread": client.num_thread}
+        try:
+            names = await client.installed_models(max_age=0)
+        except OllamaError:
+            names = frozenset()
+        projects = {name.removesuffix(":latest") for name in names
+                    if name.startswith(project_prefix)
+                    and re.fullmatch(PROJECT_PATTERN, name.removesuffix(":latest")[len(project_prefix):])}
+        return {"status": "ok", "model": client.model,
+                "ready": client.model in names or f"{client.model}:latest" in names,
+                "num_thread": client.num_thread, "project_models": sorted(projects)}
 
     @app.post("/v1/chat", dependencies=[Depends(authorize)])
     async def chat(body: ChatRequest) -> dict[str, Any]:
@@ -149,10 +173,18 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
             raise HTTPException(422, "Send either tools or a schema, not both")
         started = time.perf_counter()
         try:
+            model = client.model
+            fallback = False
+            if body.project is not None:
+                candidate = project_prefix + body.project
+                if await installed(candidate):
+                    model = candidate
+                else:
+                    fallback = True
             reply = await client.chat([_ollama_message(m) for m in body.messages],
                                       tools=[_ollama_tool(t) for t in body.tools] if body.tools else None,
                                       schema=body.json_schema, thinking=body.thinking,
-                                      temperature=body.temperature, max_tokens=body.max_tokens)
+                                      temperature=body.temperature, max_tokens=body.max_tokens, model=model)
         except OllamaError as error:
             if error.status == 400:
                 raise HTTPException(422, str(error)) from None
@@ -169,7 +201,7 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
         finish = "tool_calls" if calls else "length" if reply.get("done_reason") == "length" else "stop"
         result: dict[str, Any] = {
             "content": content, "thinking": message.get("thinking") or None, "tool_calls": calls,
-            "finish_reason": finish, "model": client.model,
+            "finish_reason": finish, "model": model, "fallback": fallback,
             "usage": {"input_tokens": reply.get("prompt_eval_count", 0), "output_tokens": reply.get("eval_count", 0)},
             "duration_ms": round((time.perf_counter() - started) * 1000)}
         if body.json_schema is not None:

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import time
 from typing import Any
 from urllib.parse import quote
 
@@ -24,6 +26,9 @@ class OllamaClient:
         self.num_thread: int | None = None  # CPU threads Ollama uses per request; None = Ollama decides
         self._keep_alive = keep_alive
         self._timeout = timeout
+        self._tags_lock = asyncio.Lock()
+        self._tags: frozenset[str] = frozenset()
+        self._tags_at: float | None = None
         self._http = httpx.AsyncClient(base_url=url.rstrip("/"), timeout=timeout, transport=transport)
 
     async def close(self) -> None:
@@ -79,15 +84,44 @@ class OllamaClient:
     async def model_ready(self) -> bool:
         """True when Ollama answers and has the model pulled."""
         try:
-            response = await self._http.get("/api/tags", timeout=3.0)
-            names = {entry.get("name") for entry in response.json().get("models", [])}
-        except (httpx.HTTPError, ValueError):
+            names = await self.installed_models()
+        except OllamaError:
             return False
         return self.model in names or f"{self.model}:latest" in names
 
+    async def installed_models(self, max_age: float = 30.0) -> frozenset[str]:
+        """Inventory no older than `max_age` seconds (0 = always ask Ollama); concurrent callers share a refresh.
+        Only successful lookups are cached."""
+        async with self._tags_lock:
+            if self._tags_at is not None and time.monotonic() - self._tags_at < max_age:
+                return self._tags
+            try:
+                response = await self._http.get("/api/tags", timeout=3.0)
+            except httpx.TimeoutException as error:
+                raise OllamaError("Ollama timed out", 504) from error
+            except httpx.HTTPError as error:
+                raise OllamaError(f"Ollama could not be reached: {error}") from error
+            except ValueError as error:
+                raise OllamaError("Ollama returned invalid model inventory") from error
+            if not response.is_success:
+                raise OllamaError(f"Ollama refused inventory lookup ({response.status_code})", response.status_code)
+            try:
+                payload = response.json()
+                entries = payload["models"]
+                if not isinstance(entries, list) or any(
+                        not isinstance(entry, dict) or not isinstance(entry.get("name"), str) for entry in entries):
+                    raise ValueError("Invalid models")
+                names = frozenset(entry["name"] for entry in entries)
+            except (ValueError, KeyError, TypeError) as error:
+                raise OllamaError("Ollama returned invalid model inventory") from error
+            self._tags = names
+            self._tags_at = time.monotonic()
+            return names
+
     async def chat(self, messages: list[dict[str, Any]], *, tools: list[dict[str, Any]] | None,
-                   schema: dict[str, Any] | None, thinking: bool, temperature: float, max_tokens: int) -> dict[str, Any]:
-        body: dict[str, Any] = {"model": self.model, "messages": messages, "stream": False, "think": thinking,
+                   schema: dict[str, Any] | None, thinking: bool, temperature: float, max_tokens: int,
+                   model: str | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {"model": model if model is not None else self.model, "messages": messages, "stream": False, "think": thinking,
                                 "keep_alive": self._keep_alive,
                                 "options": {"temperature": temperature, "num_predict": max_tokens}}
         if self.num_thread:

@@ -49,7 +49,29 @@ curl http://127.0.0.1:9130/health
    compose file (`external: true`) and calls `http://minicpm_lb:9130`. The service never references its callers.
 4. Firewall the port if the LAN should not reach it, and never expose it to the internet.
 
+## Registering a fine-tuned project model
+
+Copy your fine-tuned GGUF to the deployment host as `file.gguf`, beside a `Modelfile` containing
+`FROM ./file.gguf`. In the deployment folder on that host:
+
+```bash
+docker compose cp file.gguf ollama:/tmp/file.gguf
+docker compose cp Modelfile ollama:/tmp/Modelfile
+docker compose exec -w /tmp ollama ollama create minicpm-my-project -f Modelfile
+```
+
+Call `/v1/chat` with `"project":"my-project"`. Names match `^[a-z0-9][a-z0-9_-]{0,47}$`; invalid names
+return 422. `MINICPM_PROJECT_PREFIX` defaults to `minicpm-` when unset; change the create name if customizing it.
+An absent project uses the base; an uninstalled project uses the base with `fallback: true`. Replies report
+the selected `model`. `/health` adds `project_models`; `ready` still checks the base. Installed names are
+cached for 30 seconds per API replica; a project not in the cache re-asks Ollama, so a new model is found at once.
+If Ollama cannot list its models, the base is used with `fallback: true`.
+
+CPU model switches can unload and reload weights. `OLLAMA_MAX_LOADED_MODELS=1` is the Compose default;
+raise it on Ollama only if the deployment device has RAM for multiple resident models and contexts.
+
 ## Updating
+
 ```bash
 cd /media/ZimaOS-HD/Apps/MiniCPM52BModel
 git pull
