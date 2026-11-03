@@ -10,9 +10,11 @@ from ollama import OllamaClient
 BODY = {"messages": [{"role": "user", "content": "hi"}]}
 
 
-def client(handler, admin_password=None):
+def client(handler, admin_password=None, **options):
     ollama = OllamaClient("http://ollama", "m", transport=httpx.MockTransport(handler))
-    return TestClient(create_app(ollama, admin_password))
+    test_client = TestClient(create_app(ollama, admin_password, **options))
+    test_client.ollama = ollama
+    return test_client
 
 
 def reply(content="hello", **extra):
@@ -389,3 +391,126 @@ def test_a_saved_thread_count_reaches_other_replicas(tmp_path):
                 break
             time.sleep(0.02)
     assert ollama.num_thread == 6
+
+
+def pieces(*chunks):
+    """An Ollama streaming answer: one JSON object per line."""
+    return httpx.Response(200, content="".join(json.dumps(chunk) + "\n" for chunk in chunks).encode())
+
+
+def events(response):
+    return [json.loads(text) for text in response.text.splitlines()]
+
+
+def part(content="", thinking="", **extra):
+    return {"message": {"role": "assistant", "content": content, **({"thinking": thinking} if thinking else {}), **extra}, "done": False}
+
+
+FINAL = {"message": {"role": "assistant", "content": ""}, "done": True, "done_reason": "stop", "prompt_eval_count": 3, "eval_count": 5}
+
+
+def test_stream_sends_json_lines_then_the_same_body_as_a_call_without_stream():
+    seen = {}
+
+    def handler(request):
+        seen.update(json.loads(request.content))
+        return pieces(part(thinking="hm"), part("hel"), part("lo"), FINAL)
+
+    reply = client(handler).post("/v1/chat", json={**BODY, "stream": True})
+    assert reply.status_code == 200 and reply.headers["content-type"].startswith("application/x-ndjson")
+    assert seen["stream"] is True
+    sent = events(reply)
+    assert [(e["type"], e.get("text")) for e in sent[:-1]] == [("thinking", "hm"), ("content", "hel"), ("content", "lo")]
+    done = sent[-1]
+    assert done["type"] == "done" and done["content"] == "hello" and done["thinking"] == "hm" and done["finish_reason"] == "stop"
+    assert done["usage"] == {"input_tokens": 3, "output_tokens": 5} and done["model"] == "m" and done["fallback"] is False
+
+
+def test_stream_collects_tool_calls_and_a_schema_answer():
+    call = {"function": {"name": "get_weather", "arguments": {"city": "Paris"}}}
+    done = events(client(lambda r: pieces(part(tool_calls=[call]), FINAL)).post("/v1/chat", json={**BODY, "tools": [WEATHER], "stream": True}))[-1]
+    assert done["finish_reason"] == "tool_calls" and done["tool_calls"] == [{"id": "call_0", "name": "get_weather", "arguments": {"city": "Paris"}}]
+    schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}}
+    done = events(client(lambda r: pieces(part('{"ok":'), part(" true}"), FINAL)).post("/v1/chat", json={**BODY, "schema": schema, "stream": True}))[-1]
+    assert done["parsed"] == {"ok": True}
+
+
+def test_stream_errors_before_the_first_piece_are_http_errors_and_later_ones_are_error_lines():
+    assert client(lambda r: httpx.Response(400, json={"error": "bad request"})).post("/v1/chat", json={**BODY, "stream": True}).status_code == 422
+    assert client(lambda r: httpx.Response(503, json={"error": "queue full"})).post("/v1/chat", json={**BODY, "stream": True}).status_code == 429
+    broken = client(lambda r: pieces(part("par"), {"error": "model crashed"})).post("/v1/chat", json={**BODY, "stream": True})
+    assert broken.status_code == 200 and events(broken)[0] == {"type": "content", "text": "par"}
+    assert events(broken)[-1]["type"] == "error" and "model crashed" in events(broken)[-1]["message"]
+    bad_json = events(client(lambda r: pieces(part("not json"), FINAL)).post("/v1/chat", json={**BODY, "schema": {"type": "object"}, "stream": True}))
+    assert bad_json[-1]["type"] == "error" and bad_json[-1]["status"] == 502 and bad_json[-1]["detail"]["content"] == "not json"
+
+
+def cached(chat_reply=None, digest="d1"):
+    """A client with the cache on and an Ollama that counts its chat calls and lists the model with a digest."""
+    state = {"chats": 0, "digest": digest}
+
+    def handler(request):
+        if request.url.path == "/api/tags":
+            return httpx.Response(200, json={"models": [{"name": "m", "digest": state["digest"]}]})
+        state["chats"] += 1
+        return chat_reply(request) if chat_reply else reply(f"answer {state['chats']}")
+
+    return client(handler, cache_size=8), state
+
+
+def test_the_same_request_is_answered_from_the_cache():
+    c, state = cached()
+    first, second = c.post("/v1/chat", json=BODY), c.post("/v1/chat", json=BODY)
+    assert (first.headers["X-Cache"], second.headers["X-Cache"]) == ("miss", "hit")
+    assert second.json()["content"] == first.json()["content"] == "answer 1" and state["chats"] == 1
+    c.post("/v1/chat", json={**BODY, "thinking": False})  # any change in the request is another answer
+    c.post("/v1/chat", json={**BODY, "max_tokens": 7})
+    c.post("/v1/chat", json={"messages": [{"role": "user", "content": "other"}]})
+    assert state["chats"] == 4
+
+
+def test_only_temperature_zero_is_kept_and_the_cache_can_be_off():
+    c, state = cached()
+    for _ in range(2):
+        assert c.post("/v1/chat", json={**BODY, "temperature": 0.5}).headers["X-Cache"] == "miss"
+    assert state["chats"] == 2
+    off = client(lambda r: reply())  # no cache_size: off
+    assert [off.post("/v1/chat", json=BODY).headers["X-Cache"] for _ in range(2)] == ["miss", "miss"]
+
+
+def test_a_replaced_model_is_not_answered_from_the_old_models_cache():
+    c, state = cached()
+    c.post("/v1/chat", json=BODY)
+    assert c.post("/v1/chat", json=BODY).headers["X-Cache"] == "hit"
+    state["digest"] = "d2"  # the model was pulled again
+    c.ollama._tags_at = None  # the service asks Ollama for the inventory at most every 30 s; make that moment come
+    assert c.post("/v1/chat", json=BODY).headers["X-Cache"] == "miss"
+    c.ollama.generation += 1  # unloaded for new weights on this replica
+    assert c.post("/v1/chat", json=BODY).headers["X-Cache"] == "miss"
+
+
+def test_stream_fills_the_cache_and_a_kept_answer_streams_back_in_one_piece():
+    c, state = cached(lambda r: pieces(part("one "), part("two"), FINAL))
+    streamed = c.post("/v1/chat", json={**BODY, "stream": True})
+    kept = c.post("/v1/chat", json={**BODY, "stream": True})
+    assert (streamed.headers["X-Cache"], kept.headers["X-Cache"]) == ("miss", "hit") and state["chats"] == 1
+    sent = events(kept)
+    assert [e["type"] for e in sent] == ["content", "done"] and sent[0]["text"] == "one two" and sent[1]["content"] == "one two"
+    assert events(streamed)[-1]["content"] == "one two"
+
+
+def test_cache_size_is_a_setting_that_applies_live(tmp_path):
+    import settings
+    from options import SETTINGS
+    from tokens import TokenStore
+
+    store = TokenStore(tmp_path / "t.json")
+    config = settings.Config(store.settings_path, SETTINGS)
+    config.set({"update_check_hours": 0, "warm": False})
+    c = client(lambda r: httpx.Response(200, json={"models": [{"name": "m", "digest": "d"}]}) if r.url.path == "/api/tags" else reply(),
+               admin_password="admin", tokens=store, config=config)
+    admin = {"X-Internal-Token": "admin"}
+    use = {"X-Internal-Token": c.post("/admin/tokens", json={"name": "t"}, headers=admin).json()["token"]}
+    assert [c.post("/v1/chat", json=BODY, headers=use).headers["X-Cache"] for _ in range(2)] == ["miss", "hit"]
+    assert c.put("/admin/settings", json={"values": {"cache_size": 0}}, headers=admin).status_code == 200
+    assert c.post("/v1/chat", json=BODY, headers=use).headers["X-Cache"] == "miss"

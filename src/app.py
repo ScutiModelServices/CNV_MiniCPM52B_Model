@@ -8,6 +8,7 @@ returned parsed. Thinking is on unless the caller turns it off. GET /health repo
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import json
 import logging
@@ -18,12 +19,13 @@ import time
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 
+from cache import AnswerCache
 from ollama import OllamaClient, OllamaError
 from options import DEFAULT_MODEL, SETTINGS
 import settings
@@ -66,6 +68,7 @@ class ChatRequest(BaseModel):
     thinking: bool = True
     temperature: float = Field(0.0, ge=0, le=2)
     max_tokens: int = Field(2048, ge=1, le=8192)
+    stream: bool = False  # true: the answer arrives as JSON lines while it is made
 
 
 def _ollama_message(message: Message) -> dict[str, Any]:
@@ -104,11 +107,12 @@ class Threads(BaseModel):
 def create_app(client: OllamaClient | None = None, admin_password: str | None = None,
                tokens: TokenStore | None = None, warm: bool = False,
                updates: Updates | None = None, check_hours: float = 0, max_inflight: int | None = None,
-               config: settings.Config | None = None) -> FastAPI:
+               cache_size: int | None = None, config: settings.Config | None = None) -> FastAPI:
     """`admin_password` (MINICPM_ADMIN_PASSWORD) unlocks /admin/, where each project gets a token of its own; when it
     is set, every call except /health must send one of those tokens in the X-Internal-Token header. Unset = no
-    auth at all (local use only). `tokens` holds the project tokens (MINICPM_TOKENS_FILE). `config` (the admin page's
-    settings) replaces `warm`, `check_hours` and `max_inflight` and keeps them live; without it they stay fixed."""
+    auth at all (local use only). `tokens` holds the project tokens (MINICPM_TOKENS_FILE). `cache_size` > 0 keeps that
+    many answers per replica (MINICPM_CACHE_SIZE). `config` (the admin page's settings) replaces `warm`, `check_hours`,
+    `max_inflight` and `cache_size` and keeps them live; without it they stay fixed."""
     tokens = tokens or TokenStore(os.environ.get("MINICPM_TOKENS_FILE", "tokens.json"))
     client = client or OllamaClient(os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"),
                                     config.get("model") if config else os.environ.get("MINICPM_MODEL", DEFAULT_MODEL))
@@ -117,6 +121,12 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
         return config.get("project_prefix") if config else os.environ.get("MINICPM_PROJECT_PREFIX", "minicpm-")
 
     inflight = 0
+    cache = AnswerCache()
+
+    def cache_limit() -> int:
+        """Answers this replica keeps; 0 = off."""
+        return config.get("cache_size") if config else (
+            cache_size if cache_size is not None else int(os.environ.get("MINICPM_CACHE_SIZE") or 0))
 
     def inflight_limit() -> int:
         """Calls this replica lets wait on Ollama at once; more get 429. 0 = 4 x OLLAMA_NUM_PARALLEL."""
@@ -234,34 +244,83 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
                 "ready": client.model in names or f"{client.model}:latest" in names,
                 "num_thread": client.num_thread, "project_models": sorted(projects)}
 
-    @app.post("/v1/chat")
-    async def chat(body: ChatRequest, allowed: list[str] | None = Depends(authorize), _slot: None = Depends(slot)) -> dict[str, Any]:
-        check_scope(allowed, body.project)
-        if body.tools and body.json_schema is not None:
-            raise HTTPException(422, "Send either tools or a schema, not both")
-        started = time.perf_counter()
+    def http_error(error: OllamaError) -> HTTPException:
+        if error.status == 400:
+            return HTTPException(422, str(error))
+        if error.status == 503:  # Ollama's own queue is full
+            return HTTPException(429, str(error), headers={"Retry-After": "5"})
+        return HTTPException(504 if error.status == 504 else 502, str(error))
+
+    async def cache_key(body: ChatRequest, model: str) -> str:
+        """Everything that shapes the answer. The model's digest (from the inventory, at most 30 s old) is in it, so a
+        project model that was replaced is not answered from the old model's cache."""
         try:
-            model = client.model
-            fallback = False
-            if body.project is not None:
-                candidate = prefix() + body.project
-                if await installed(candidate):
-                    model = candidate
-                else:
-                    fallback = True
-            reply = await client.chat([_ollama_message(m) for m in body.messages],
-                                      tools=[_ollama_tool(t) for t in body.tools] if body.tools else None,
-                                      schema=body.json_schema, thinking=body.thinking,
-                                      temperature=body.temperature, max_tokens=body.max_tokens, model=model)
+            await client.installed_models(30.0)
+        except OllamaError:
+            pass
+        part = [client.generation, client.digest(model), model, [m.model_dump() for m in body.messages],
+                [t.model_dump() for t in body.tools or []], body.json_schema, body.thinking, body.max_tokens]
+        return hashlib.sha256(json.dumps(part, sort_keys=True, default=str).encode()).hexdigest()
+
+    def line(event: dict[str, Any]) -> str:
+        return json.dumps(event, ensure_ascii=False) + "\n"
+
+    def ndjson(lines: Any, cached: str) -> StreamingResponse:
+        return StreamingResponse(lines, media_type="application/x-ndjson", headers={"X-Cache": cached})
+
+    async def replay(result: dict[str, Any]):
+        """A kept answer in the shape of a stream: the whole text in one piece, then `done`."""
+        if result.get("thinking"):
+            yield line({"type": "thinking", "text": result["thinking"]})
+        if result["content"]:
+            yield line({"type": "content", "text": result["content"]})
+        yield line({"type": "done", **result})
+
+    async def live_lines(chunks: Any, first: dict[str, Any] | None, model: str, fallback: bool, started: float,
+                         schema: dict[str, Any] | None, key: str | None, size: int):
+        """One JSON line per piece of the answer, then `done` with the same body a call without `stream` returns.
+        A failure after the first piece can only be sent as an `error` line."""
+        content: list[str] = []
+        thinking: list[str] = []
+        calls: list[dict[str, Any]] = []
+        last: dict[str, Any] = {}
+        try:
+            async def pieces():
+                if first is not None:
+                    yield first
+                async for chunk in chunks:
+                    yield chunk
+
+            async for chunk in pieces():
+                message = chunk.get("message") or {}
+                for field, parts in (("thinking", thinking), ("content", content)):
+                    if message.get(field):
+                        parts.append(message[field])
+                        yield line({"type": field, "text": message[field]})
+                calls.extend(message.get("tool_calls") or [])
+                if chunk.get("done"):
+                    last = chunk
+            reply = {"message": {"content": "".join(content), "thinking": "".join(thinking) or None, "tool_calls": calls},
+                     "done_reason": last.get("done_reason"), "prompt_eval_count": last.get("prompt_eval_count", 0),
+                     "eval_count": last.get("eval_count", 0)}
+            result = build(reply, model, fallback, started, schema)
         except OllamaError as error:
-            if error.status == 400:
-                raise HTTPException(422, str(error)) from None
-            if error.status == 503:  # Ollama's own queue is full
-                raise HTTPException(429, str(error), headers={"Retry-After": "5"}) from None
-            raise HTTPException(504 if error.status == 504 else 502, str(error)) from None
+            yield line({"type": "error", "status": http_error(error).status_code, "message": str(error)})
+            return
+        except HTTPException as error:
+            yield line({"type": "error", "status": error.status_code, "detail": error.detail})
+            return
         except Exception:
             _log.exception("MiniCPM chat failed")
-            raise HTTPException(500, "MiniCPM could not answer") from None
+            yield line({"type": "error", "status": 500, "message": "MiniCPM could not answer"})
+            return
+        finally:
+            await chunks.aclose()
+        if key:
+            cache.put(key, result, size)
+        yield line({"type": "done", **result})
+
+    def build(reply: dict[str, Any], model: str, fallback: bool, started: float, schema: dict[str, Any] | None) -> dict[str, Any]:
         message = reply.get("message") or {}
         content = message.get("content") or ""
         calls = [{"id": call.get("id") or f"call_{index}", "name": call["function"]["name"],
@@ -274,12 +333,60 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
             "finish_reason": finish, "model": model, "fallback": fallback,
             "usage": {"input_tokens": reply.get("prompt_eval_count", 0), "output_tokens": reply.get("eval_count", 0)},
             "duration_ms": round((time.perf_counter() - started) * 1000)}
-        if body.json_schema is not None:
+        if schema is not None:
             try:
                 result["parsed"] = json.loads(content)
             except ValueError:
                 # Cut off by max_tokens or malformed; the caller can still see `content`.
                 raise HTTPException(502, {"message": "The model did not return valid JSON", "content": content}) from None
+        return result
+
+    @app.post("/v1/chat")
+    async def chat(body: ChatRequest, response: Response, allowed: list[str] | None = Depends(authorize),
+                   _slot: None = Depends(slot)) -> Any:
+        check_scope(allowed, body.project)
+        if body.tools and body.json_schema is not None:
+            raise HTTPException(422, "Send either tools or a schema, not both")
+        started = time.perf_counter()
+        size = cache_limit() if body.temperature == 0 else 0  # a higher temperature asks for a different answer each time
+        options: dict[str, Any] = dict(tools=[_ollama_tool(t) for t in body.tools] if body.tools else None,
+                                       schema=body.json_schema, thinking=body.thinking,
+                                       temperature=body.temperature, max_tokens=body.max_tokens)
+        try:
+            model, fallback = client.model, False
+            if body.project is not None:
+                candidate = prefix() + body.project
+                if await installed(candidate):
+                    model = candidate
+                else:
+                    fallback = True
+            key = await cache_key(body, model) if size else None
+            kept = cache.get(key, size) if key else None
+            if kept is not None:
+                kept = {**kept, "duration_ms": round((time.perf_counter() - started) * 1000)}
+                if body.stream:
+                    return ndjson(replay(kept), "hit")
+                response.headers["X-Cache"] = "hit"
+                return kept
+            messages = [_ollama_message(m) for m in body.messages]
+            if body.stream:
+                chunks = client.chat_stream(messages, model=model, **options)
+                try:
+                    first = await anext(chunks, None)  # the first piece is waited for here, so a refusal is still an HTTP error
+                except BaseException:
+                    await chunks.aclose()
+                    raise
+                return ndjson(live_lines(chunks, first, model, fallback, started, body.json_schema, key, size), "miss")
+            reply = await client.chat(messages, model=model, **options)
+        except OllamaError as error:
+            raise http_error(error) from None
+        except Exception:
+            _log.exception("MiniCPM chat failed")
+            raise HTTPException(500, "MiniCPM could not answer") from None
+        result = build(reply, model, fallback, started, body.json_schema)
+        if key:
+            cache.put(key, result, size)
+        response.headers["X-Cache"] = "miss"
         return result
 
     @app.put("/admin/threads", dependencies=[Depends(admin)])
