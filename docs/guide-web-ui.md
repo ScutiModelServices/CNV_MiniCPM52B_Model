@@ -54,12 +54,12 @@ Tokens are enforced only while `MINICPM_ADMIN_PASSWORD` is set.
 ## Ollama CPU threads
 Use the synchronized slider or number field, then **Apply**. Both accept 1 to 256. Apply is disabled and
 shows a busy indicator during saving; a short **Saved** confirmation follows. The page states:
-“Saved to settings.json. Other replicas apply it on restart.”
+“Saved to settings.json. Other replicas apply it within a few seconds.”
 - Sets `num_thread` sent to Ollama with each request: how many CPU threads it uses per generation. Start near the
   number of physical cores the host can spare.
 - Range 1 to 256. The field shows the value in use now (`num_thread` in `/health`; empty = Ollama decides).
 - The change applies at once to the replica that answers the click and is saved to `settings.json` next to
-  `tokens.json`. Other replicas pick it up when they restart: `docker compose restart minicpm`.
+  `tokens.json`. Other replicas pick it up within a few seconds; no restart is needed.
 - The saved value beats `MINICPM_NUM_THREAD` from `.env`. Remove `settings.json` from the `/data` volume to go back
   to the `.env` value.
 
