@@ -1,0 +1,17 @@
+"""The options the admin page can change. Each can still start from its environment variable; a saved value wins."""
+
+from settings import Setting
+
+DEFAULT_MODEL = "hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M"
+
+SETTINGS = [
+    Setting("update_check_hours", "Check for updates every (hours)", "float", 6.0, "MINICPM_UPDATE_CHECK_HOURS", 0, 720,
+            help="0 = only when you press Check now"),
+    Setting("max_inflight", "Calls allowed to wait on Ollama", "int", 0, "MINICPM_MAX_INFLIGHT", 0, 10000,
+            help="Per replica; more get 429. 0 = 4 x Ollama's parallel requests"),
+    Setting("project_prefix", "Project model prefix", "text", "minicpm-", "MINICPM_PROJECT_PREFIX",
+            help="A project uses the Ollama model named prefix + project"),
+    Setting("model", "Base model", "text", DEFAULT_MODEL, "MINICPM_MODEL", restart=True, blank=False,
+            help="After a restart, pull a new one from the Updates card"),
+    Setting("warm", "Load the model at start", "bool", True, "MINICPM_WARM", restart=True),
+]

@@ -122,6 +122,20 @@ td time { font-variant-numeric: tabular-nums; }
 .thread-label { margin-top: 18px; }
 .saved { color: var(--accent); font-size: .85em; min-height: 1.55em; margin-top: 6px; }
 .hint { padding: 0 4px; overflow-wrap: anywhere; }
+.scope { display: block; margin-top: 2px; color: var(--muted); font-size: .8em; }
+.row-actions { display: flex; flex-direction: column; gap: 6px; }
+.setting { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.setting-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.setting label { margin-bottom: 4px; }
+.setting input[type="number"], .setting input[type="text"] { width: 100%; }
+.setting button { min-height: 32px; padding: 3px 10px; font-size: .8em; }
+#save-settings { margin-top: 16px; }
+dialog .field + .field { margin-top: 12px; }
+dialog input { width: 100%; }
+.update-list { list-style: none; margin: 14px 0; padding: 0; }
+.update-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .85em; overflow-wrap: anywhere; }
+.update-list .new { color: var(--warning); font-weight: 600; }
+.update-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
 dialog { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow-y: auto; padding: 24px; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--surface); color: var(--text); }
 dialog::backdrop { background: var(--backdrop); }
 dialog h2 { margin-bottom: 10px; }
@@ -191,6 +205,9 @@ dialog p { overflow-wrap: anywhere; }
       <p class="description">Give each project its own access. Revoke a token to stop its requests.</p>
       <form id="create" class="create-form">
         <div class="field"><label for="name">Project name</label><input id="name" placeholder="e.g. Garrison" required maxlength="64" autocomplete="off"></div>
+        <div class="field"><label for="projects">Allowed projects</label><input id="projects" placeholder="All (or: app-a, app-b)" autocomplete="off"></div>
+        <div class="field"><label for="rate">Requests per minute</label><input id="rate" type="number" min="1" max="100000" step="1" placeholder="Unlimited"></div>
+        <div class="field"><label for="expires">Expires in (days)</label><input id="expires" type="number" min="1" max="3650" step="1" placeholder="Never"></div>
         <button id="create-button" class="primary">Create token</button>
       </form>
       <p id="token-error" class="error" role="alert"></p>
@@ -222,14 +239,47 @@ dialog p { overflow-wrap: anywhere; }
           <button id="apply">Apply</button>
         </div>
       </form>
-      <p class="description">Saved to settings.json. Other replicas apply it on restart.</p>
+      <p class="description">Saved to settings.json. Other replicas apply it within a few seconds.</p>
       <p id="saved" class="saved" role="status"></p>
       <p id="threads-error" class="error" role="alert"></p>
+    </section>
+    <section class="card" aria-labelledby="models-title">
+      <div class="section-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5ZM3 13l9 5 9-5"/></svg><h2 id="models-title">Project models</h2></div>
+      <p class="description">Models loaded for one project, as seen by the replica that answered. A project without one uses the base model.</p>
+      <ul id="project-models" class="update-list"></ul>
+      <p id="project-models-empty" class="description">None loaded.</p>
+    </section>
+    <section id="updates-card" class="card" aria-labelledby="updates-title" hidden>
+      <div class="section-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14"/></svg><h2 id="updates-title">Updates</h2></div>
+      <p id="updates-description" class="description">Looks for a newer package on PyPI and newer weights on the Hugging Face Hub.</p>
+      <ul id="update-list" class="update-list"></ul>
+      <div class="update-actions"><button id="check-updates" type="button">Check now</button><button id="update-weights" class="primary" type="button" hidden>Download new weights</button></div>
+      <p id="update-note" class="description" role="status"></p>
+      <p id="updates-error" class="error" role="alert"></p>
+    </section>
+    <section id="settings-card" class="card" aria-labelledby="settings-title" hidden>
+      <div class="section-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10m4 0h2M4 17h2m4 0h10M14 4v6M6 14v6"/></svg><h2 id="settings-title">Settings</h2></div>
+      <p class="description">A value saved here beats the environment variable. Reset goes back to it. Every replica picks a change up within a few seconds.</p>
+      <form id="settings-form">
+        <div id="settings-list"></div>
+        <button id="save-settings" class="primary">Save changes</button>
+      </form>
+      <p id="settings-note" class="saved" role="status"></p>
+      <p id="settings-error" class="error" role="alert"></p>
     </section>
     <p id="workers" class="hint"></p>
   </section>
 </div>
 </main>
+<dialog id="edit-dialog" aria-labelledby="edit-title">
+  <h2 id="edit-title">Edit token</h2>
+  <form id="edit-form">
+    <div class="field"><label for="edit-projects">Allowed projects</label><input id="edit-projects" placeholder="All (or: app-a, app-b)" autocomplete="off"></div>
+    <div class="field"><label for="edit-rate">Requests per minute</label><input id="edit-rate" type="number" min="1" max="100000" step="1" placeholder="Unlimited"></div>
+    <p id="edit-error" class="error" role="alert"></p>
+    <div class="dialog-actions"><button id="cancel-edit" type="button">Cancel</button><button id="save-edit" class="primary">Save</button></div>
+  </form>
+</dialog>
 <dialog id="revoke-dialog" aria-labelledby="revoke-title" aria-describedby="revoke-message">
   <h2 id="revoke-title">Revoke token?</h2>
   <p id="revoke-message"></p>
@@ -238,12 +288,12 @@ dialog p { overflow-wrap: anywhere; }
 </dialog>
 <script>
 // Per-service configuration. The rest of this page is shared verbatim.
-const CONFIG = {title: "MiniCPM51BModel", address: location.origin, threadLabel: "Ollama CPU threads", threadField: "num_thread", adminEnv: "MINICPM_ADMIN_PASSWORD", replicasEnv: "MINICPM_REPLICAS", extraTile: {label: "Ollama parallel requests", field: "ollama_parallel"}};
+const CONFIG = {title: "MiniCPM52BModel", address: location.origin, threadLabel: "Ollama CPU threads", threadField: "num_thread", adminEnv: "MINICPM_ADMIN_PASSWORD", replicasEnv: "MINICPM_REPLICAS", extraTile: {label: "Ollama parallel requests", field: "ollama_parallel"}, updates: true};
 
 const $ = id => document.getElementById(id);
 const storageKey = CONFIG.title + ":admin";
 let admin = "", session = new AbortController(), poll, polling = false, initializedThreads = false;
-let tokenRows = [], pendingRevoke = null, savedTimer, copyTimer, tokenVersion = 0;
+let tokenRows = [], pendingRevoke = null, pendingEdit = null, settingRows = [], settingsTimer, savedTimer, copyTimer, tokenVersion = 0;
 let theme = "system";
 try { theme = localStorage.getItem("admin-theme") || "system"; } catch {}
 if (!["system", "light", "dark"].includes(theme)) theme = "system";
@@ -262,6 +312,7 @@ if (CONFIG.extraTile) {
   $("extra-tile").hidden = false;
   $("extra-label").textContent = CONFIG.extraTile.label;
 }
+$("updates-card").hidden = !CONFIG.updates;
 $("theme").onclick = () => {
   theme = ["system", "light", "dark"][(["system", "light", "dark"].indexOf(theme) + 1) % 3];
   try { localStorage.setItem("admin-theme", theme); } catch {}
@@ -296,9 +347,22 @@ function signOut(focus = true) {
   $("signin").hidden = false;
   $("admin").value = "";
   $("name").value = "";
+  $("projects").value = "";
+  $("rate").value = "";
+  $("expires").value = "";
+  $("edit-dialog").close();
+  pendingEdit = null;
+  $("project-models").replaceChildren();
+  $("settings-list").replaceChildren();
+  $("settings-card").hidden = true;
+  settingRows = [];
+  clearTimeout(settingsTimer);
+  $("settings-note").textContent = "";
   $("count").value = "";
   $("saved").textContent = "";
-  for (const id of ["login-error", "page-error", "token-error", "threads-error", "revoke-error"]) $(id).textContent = "";
+  $("update-list").replaceChildren();
+  $("update-note").textContent = "";
+  for (const id of ["login-error", "page-error", "token-error", "threads-error", "revoke-error", "updates-error", "settings-error"]) $(id).textContent = "";
   initializedThreads = false;
   if (focus) $("admin").focus();
 }
@@ -312,14 +376,14 @@ function report(error, target) {
     $(target).textContent = error.message;
   }
 }
-async function call(method, path, body) {
+async function call(method, path, body, timeout = 10000) {
   const activeSession = session;
   let response;
   try {
     response = await fetch("../admin/" + path, {
       method, headers: {"X-Internal-Token": admin, "Content-Type": "application/json"},
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.any([activeSession.signal, AbortSignal.timeout(10000)])
+      signal: AbortSignal.any([activeSession.signal, AbortSignal.timeout(timeout)])
     });
   } catch (error) {
     if (activeSession.signal.aborted) throw new DOMException("Signed out", "AbortError");
@@ -328,7 +392,8 @@ async function call(method, path, body) {
   const data = await response.json().catch(() => ({}));
   if (activeSession.signal.aborted) throw new DOMException("Signed out", "AbortError");
   if (!response.ok) {
-    const message = response.status === 401
+    const message = (response.status === 502 || response.status === 422) && typeof data.detail === "string" ? data.detail
+      : response.status === 401
       ? "Wrong admin password. Check the password and that " + CONFIG.adminEnv + " is set on the server."
       : "Request failed (" + response.status + "). Check the service and try again.";
     const error = new Error(message);
@@ -344,6 +409,42 @@ function relative(seconds) {
     const count = Math.floor(elapsed / size);
     if (count) return count + " " + unit + (count === 1 ? "" : "s") + " ago";
   }
+}
+function parseProjects(value) {
+  const list = value.split(",").map(item => item.trim()).filter(Boolean);
+  const bad = list.find(item => !/^[a-z0-9][a-z0-9_-]{0,47}$/.test(item));
+  return {list, error: bad ? "Project “" + bad + "” is not valid. Use lowercase letters, digits, - and _." : ""};
+}
+function scopeText(row) {
+  const parts = [];
+  if (row.projects) parts.push("Only: " + row.projects.join(", "));
+  if (row.rate) parts.push(row.rate + "/min");
+  if (row.expires) parts.push(row.expires * 1000 <= Date.now() ? "Expired" : "Expires " + new Date(row.expires * 1000).toLocaleDateString());
+  return parts.join(" · ");
+}
+function statsText(row) {
+  return row.timed ? "Errors " + (row.errors || 0) + " · avg " + Math.round((row.latency_ms || 0) / row.timed) + " ms" : "";
+}
+function setNote(td, text) {
+  let note = td.querySelector(".scope");
+  if (!text) { if (note) note.remove(); return; }
+  if (!note) {
+    note = document.createElement("small");
+    note.className = "scope";
+    td.append(note);
+  }
+  note.textContent = text;
+}
+function renderProjectModels(data) {
+  const models = data && data.project_models ? (Array.isArray(data.project_models) ? data.project_models : Object.keys(data.project_models)) : [];
+  $("project-models").replaceChildren(...models.map(name => {
+    const li = document.createElement("li"), span = document.createElement("span");
+    span.textContent = name;
+    span.className = "mono";
+    li.append(span);
+    return li;
+  }));
+  $("project-models-empty").hidden = models.length > 0;
 }
 function renderTokens(rows) {
   tokenRows = rows;
@@ -361,6 +462,8 @@ function renderTokens(rows) {
         used.title = new Date(row.last_used * 1000).toLocaleString();
       }
       previous.children[3].firstElementChild.textContent = row.requests;
+      setNote(previous.children[0], scopeText(row));
+      setNote(previous.children[3], statsText(row));
       return previous;
     }
     const tr = document.createElement("tr");
@@ -380,6 +483,7 @@ function renderTokens(rows) {
         content.title = new Date(stamp * 1000).toLocaleString();
       }
       td.append(content);
+      setNote(td, label === "Project" ? scopeText(row) : label === "Requests" ? statsText(row) : "");
       tr.append(td);
     }
     const td = document.createElement("td");
@@ -394,7 +498,21 @@ function renderTokens(rows) {
       $("revoke-error").textContent = "";
       $("revoke-dialog").showModal();
     };
-    td.append(button);
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "Edit";
+    edit.setAttribute("aria-label", "Edit token for " + row.name);
+    edit.onclick = () => {
+      pendingEdit = tokenRows.find(token => token.id === row.id) || row;
+      $("edit-projects").value = (pendingEdit.projects || []).join(", ");
+      $("edit-rate").value = pendingEdit.rate || "";
+      $("edit-error").textContent = "";
+      $("edit-dialog").showModal();
+    };
+    const actions = document.createElement("div");
+    actions.className = "row-actions";
+    actions.append(edit, button);
+    td.append(actions);
     tr.append(td);
     return tr;
   });
@@ -423,21 +541,116 @@ async function refreshHealth() {
     if (activeSession.signal.aborted) return;
   }
   if (activeSession.signal.aborted) return;
-  const state = !data || data.status !== "ok" ? "Unreachable" : CONFIG.extraTile && !data.ready ? "Starting" : "Healthy";
+  const state = !data || data.status !== "ok" ? "Unreachable" : data.model && !data.ready ? "Starting" : "Healthy";
   $("health").dataset.state = state;
   $("health-text").textContent = state;
   $("health-icon").setAttribute("d", state === "Healthy"
     ? "m8 12 3 3 5-6M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"
     : state === "Starting" ? "M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"
     : "m9 9 6 6m0-6-6 6M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0");
-  $("model-value").textContent = !data ? "—" : CONFIG.extraTile ? (data.ready ? "Ready" : "Starting")
-    : Object.values(data.models || {}).filter(Boolean).length + " / " + Object.keys(data.models || {}).length;
+  $("model-value").textContent = !data ? "—" : data.models
+    ? Object.values(data.models).filter(Boolean).length + " / " + Object.keys(data.models).length
+    : (data.ready ? "Ready" : "Starting");
   $("thread-value").textContent = data ? (data[CONFIG.threadField] ?? "Auto") : "—";
+  renderProjectModels(data);
   if (data && !initializedThreads) {
     $("count").value = data[CONFIG.threadField] ?? "";
     $("slider").value = data[CONFIG.threadField] ?? 1;
     initializedThreads = true;
   }
+}
+function short(sha) { return sha ? sha.slice(0, 7) : "none"; }
+function renderUpdates(data) {
+  $("updates-description").textContent = data.description || "Looks for a newer package on PyPI and newer weights on the Hugging Face Hub.";
+  const rows = [];
+  if (data.package) rows.push([data.package.name + " package", data.package.installed + (data.package.update ? " → " + data.package.latest : ""), data.package.update]);
+  for (const item of data.weights || []) rows.push([item.repo, short(item.cached) + (item.update ? " → " + short(item.latest) : ""), item.update]);
+  $("update-list").replaceChildren(...rows.map(([name, value, newer]) => {
+    const li = document.createElement("li"), left = document.createElement("span"), right = document.createElement("span");
+    left.textContent = name;
+    right.textContent = value;
+    right.className = "mono" + (newer ? " new" : "");
+    li.append(left, right);
+    return li;
+  }));
+  $("update-weights").hidden = !(data.weights || []).some(item => item.update);
+  $("check-updates").disabled = !data.enabled;
+  $("update-note").textContent = !data.enabled ? "Updates are off while the service runs offline."
+    : data.error ? "Last check failed: " + data.error
+    : !data.checked_at ? "Not checked yet."
+    : "Checked " + relative(data.checked_at) + "." + (data.package && data.package.update ? " A newer package needs uv lock --upgrade-package " + data.package.name + ", then a rebuild." : "");
+}
+async function refreshUpdates() {
+  if (CONFIG.updates) renderUpdates(await call("GET", "updates"));
+}
+function renderSettings(rows) {
+  settingRows = rows;
+  $("settings-card").hidden = !rows.length;
+  $("settings-list").replaceChildren(...rows.map(row => {
+    const box = document.createElement("div"), top = document.createElement("div");
+    const label = document.createElement("label"), reset = document.createElement("button");
+    const input = document.createElement("input"), note = document.createElement("small");
+    box.className = "setting";
+    top.className = "setting-top";
+    input.id = "setting-" + row.key;
+    label.htmlFor = input.id;
+    label.textContent = row.label;
+    reset.type = "button";
+    reset.textContent = "Reset";
+    reset.hidden = row.source !== "saved";
+    reset.setAttribute("aria-label", "Reset " + row.label);
+    reset.onclick = () => saveSettings({[row.key]: null});
+    if (row.kind === "bool") {
+      input.type = "checkbox";
+      input.checked = !!row.value;
+    } else if (row.kind === "text") {
+      input.type = "text";
+      input.value = row.value;
+      input.autocomplete = "off";
+    } else {
+      input.type = "number";
+      input.step = row.kind === "int" ? "1" : "any";
+      if (row.minimum != null) input.min = row.minimum;
+      if (row.maximum != null) input.max = row.maximum;
+      input.value = row.value;
+    }
+    note.className = "scope";
+    note.textContent = [row.help, "From " + row.source + (row.restart ? " · applies after a restart" : "")].filter(Boolean).join(" · ");
+    top.append(label, reset);
+    box.append(top, input, note);
+    return box;
+  }));
+}
+function settingValue(row) {
+  const input = $("setting-" + row.key);
+  if (row.kind === "bool") return input.checked;
+  if (row.kind === "text") return input.value.trim();
+  return input.value === "" ? null : Number(input.value);
+}
+async function saveSettings(values) {
+  $("settings-error").textContent = "";
+  $("settings-note").textContent = "";
+  busy("save-settings", true);
+  try {
+    renderSettings((await call("PUT", "settings", {values})).settings);
+    $("settings-note").textContent = "Saved";
+    clearTimeout(settingsTimer);
+    settingsTimer = setTimeout(() => { $("settings-note").textContent = ""; }, 3000);
+  } catch (error) { report(error, "settings-error"); }
+  finally { busy("save-settings", false); }
+}
+$("settings-form").onsubmit = event => {
+  event.preventDefault();
+  const values = {};
+  for (const row of settingRows) {
+    const value = settingValue(row);
+    if (value !== null && value !== row.value) values[row.key] = value;
+  }
+  if (Object.keys(values).length) saveSettings(values);
+  else $("settings-note").textContent = "Nothing changed";
+};
+async function refreshSettings() {
+  renderSettings((await call("GET", "settings")).settings);
 }
 async function pollStatus() {
   if (polling || !admin) return;
@@ -446,7 +659,8 @@ async function pollStatus() {
     await Promise.all([
       refreshHealth(),
       refreshTokens().catch(error => report(error, "page-error")),
-      refreshWorkers().catch(error => report(error, "page-error"))
+      refreshWorkers().catch(error => report(error, "page-error")),
+      refreshUpdates().catch(error => report(error, "page-error"))
     ]);
   } finally { polling = false; }
 }
@@ -461,7 +675,7 @@ async function signIn(password) {
     $("signin").hidden = true;
     $("dashboard").hidden = false;
     $("signout").focus();
-    await Promise.all([refreshHealth(), refreshWorkers().catch(error => report(error, "page-error"))]);
+    await Promise.all([refreshHealth(), refreshWorkers().catch(error => report(error, "page-error")), refreshUpdates().catch(error => report(error, "page-error")), refreshSettings().catch(error => report(error, "page-error"))]);
     if (admin) poll = setInterval(pollStatus, 10000);
   } catch (error) {
     try { sessionStorage.removeItem(storageKey); } catch {}
@@ -477,15 +691,29 @@ $("create").onsubmit = async event => {
     $("name").focus();
     return;
   }
+  const parsed = parseProjects($("projects").value), projects = parsed.list;
+  const invalid = parsed.error
+    || (!$("rate").validity.valid && "Requests per minute must be a whole number from 1 to 100000.")
+    || (!$("expires").validity.valid && "Expiry must be a whole number of days from 1 to 3650.");
+  if (invalid) {
+    $("token-error").textContent = invalid;
+    $("projects").focus();
+    return;
+  }
   tokenVersion++;
   forgetToken();
   $("token-error").textContent = "";
   busy("create-button", true);
   try {
-    const made = await call("POST", "tokens", {name});
+    const made = await call("POST", "tokens", {name, ...(projects.length ? {projects} : {}),
+      ...($("rate").value ? {rate: Number($("rate").value)} : {}),
+      ...($("expires").value ? {expires_days: Number($("expires").value)} : {})});
     $("fresh-token").textContent = made.token;
     $("fresh").hidden = false;
     $("name").value = "";
+    $("projects").value = "";
+    $("rate").value = "";
+    $("expires").value = "";
     $("copy").focus();
     await refreshTokens();
   } catch (error) { report(error, "token-error"); }
@@ -531,6 +759,43 @@ $("threads").onsubmit = async event => {
     savedTimer = setTimeout(() => { $("saved").textContent = ""; }, 3000);
   } catch (error) { report(error, "threads-error"); }
   finally { busy("apply", false); }
+};
+$("check-updates").onclick = async () => {
+  $("updates-error").textContent = "";
+  busy("check-updates", true);
+  try { renderUpdates(await call("POST", "updates/check", undefined, 60000)); }
+  catch (error) { report(error, "updates-error"); }
+  finally { busy("check-updates", false); }
+};
+$("update-weights").onclick = async () => {
+  $("updates-error").textContent = "";
+  busy("update-weights", true);
+  try {
+    const data = await call("POST", "updates/weights", undefined, 1800000);
+    renderUpdates(data);
+    if (!data.error) $("update-note").textContent += " " + (data.reload_note || "Weights downloaded; this replica loaded them. Restart the other replicas to load them too.");
+  } catch (error) { report(error, "updates-error"); }
+  finally { busy("update-weights", false); }
+};
+$("cancel-edit").onclick = () => $("edit-dialog").close();
+$("edit-form").onsubmit = async event => {
+  event.preventDefault();
+  if (!pendingEdit) return;
+  const parsed = parseProjects($("edit-projects").value);
+  if (parsed.error || !$("edit-rate").validity.valid) {
+    $("edit-error").textContent = parsed.error || "Requests per minute must be a whole number from 1 to 100000.";
+    return;
+  }
+  tokenVersion++;
+  busy("save-edit", true);
+  $("edit-error").textContent = "";
+  try {
+    await call("PUT", "tokens/" + encodeURIComponent(pendingEdit.id),
+      {projects: parsed.list.length ? parsed.list : null, rate: $("edit-rate").value ? Number($("edit-rate").value) : null});
+    $("edit-dialog").close();
+    await refreshTokens();
+  } catch (error) { report(error, $("edit-dialog").open ? "edit-error" : "token-error"); }
+  finally { busy("save-edit", false); }
 };
 $("cancel-revoke").onclick = () => $("revoke-dialog").close();
 $("revoke-dialog").onclick = event => {
