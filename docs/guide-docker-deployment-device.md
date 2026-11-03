@@ -19,7 +19,7 @@ Run `MiniCPM52BModel\tools\deploy.bat`:
 | 4, 5 | Dry runs |
 | 6 | chown helper if option 2 says `Permission denied` |
 
-Override the target with `DEPLOY_HOST`, `DEPLOY_DIR`, `DEPLOY_WEB_PORT`. Commit `main` first: publish reads committed
+Keep your own target in the git-ignored `tools\deploy.local.bat` (copy `tools\deploy.local.example.bat`), or override it with `DEPLOY_HOST`, `DEPLOY_DIR`, `DEPLOY_WEB_PORT`. Commit `main` first: publish reads committed
 `main`. The `live` branch holds only Dockerfile, compose, nginx.conf, pyproject, src, web and README.
 
 ## 2. First-time setup on the box

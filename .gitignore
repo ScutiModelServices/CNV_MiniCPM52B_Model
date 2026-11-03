@@ -9,3 +9,4 @@ zip_versions/
 tokens.json
 tokens.json.lock
 settings.json
+tools/deploy.local.bat

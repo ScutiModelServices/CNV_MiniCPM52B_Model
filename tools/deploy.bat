@@ -4,8 +4,10 @@ rem deployment machine in ONE ssh session (one password prompt).
 rem The server refuses root over ssh, so we log in as a normal user. If the copy cannot write,
 rem option 6 copies the one-time "chown" command and opens the server's web terminal (root shell).
 rem The service runs from its own docker-compose.yml in the deploy folder, with .env beside it.
-rem Override the target: set DEPLOY_HOST / DEPLOY_DIR / DEPLOY_WEB_PORT before running.
+rem Override the target: set DEPLOY_HOST / DEPLOY_DIR / DEPLOY_WEB_PORT before running, or put them in the git-ignored
+rem tools\deploy.local.bat (copy tools\deploy.local.example.bat) so the address stays out of the repository.
 setlocal enabledelayedexpansion
+if exist "%~dp0deploy.local.bat" call "%~dp0deploy.local.bat"
 if not defined DEPLOY_HOST set "DEPLOY_HOST=user@your-server.local"
 if not defined DEPLOY_DIR set "DEPLOY_DIR=/media/ZimaOS-HD/Apps/MiniCPM52BModel"
 if not defined DEPLOY_WEB_PORT set "DEPLOY_WEB_PORT=7681"
