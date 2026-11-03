@@ -68,15 +68,17 @@ class TokenStore:
                  "last_used": row.get("last_used"), "requests": row.get("requests", 0)}
                 for row in self._load()]
 
-    def create(self, name: str) -> dict:
-        """The plaintext token is returned once and never stored."""
+    def create(self, name: str, projects: list[str] | None = None) -> dict:
+        """The plaintext token is returned once and never stored. `projects` limits which project models it may use;
+        None (or empty) = all."""
         token = PREFIX + secrets.token_urlsafe(32)
         row = {"id": secrets.token_hex(4), "name": name, "created": int(time.time()),
                "last_used": None, "requests": 0, "hash": _hash(token)}
+        if projects:
+            row["projects"] = sorted(set(projects))
         with self._edit() as rows:
             self._save([*rows, row])
-        return {"id": row["id"], "name": name, "created": row["created"], "last_used": None, "requests": 0,
-                "token": token}
+        return {**{k: v for k, v in row.items() if k != "hash"}, "token": token}
 
     def revoke(self, token_id: str) -> bool:
         with self._edit() as rows:
@@ -86,6 +88,10 @@ class TokenStore:
             return len(kept) != len(rows)
 
     def valid(self, token: str) -> bool:
+        return self.lookup(token) is not None
+
+    def lookup(self, token: str) -> dict | None:
+        """The token's row (`projects` present when it is limited), or None when it is not a live token."""
         digest = _hash(token)
         with self._edit() as rows:
             for row in rows:
@@ -98,5 +104,5 @@ class TokenStore:
                         row["last_used"] = now
                         row["requests"] = row.get("requests", 0) + self._pending.pop(row["id"])
                         self._save(rows)
-                    return True
-        return False
+                    return row
+        return None

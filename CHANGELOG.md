@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Tokens can be limited to a list of projects (set on the admin page when creating one). Another project is `403`; no `project` is always allowed.
+
 ## 1.1.0
 
 - Optional validated `project` on `/v1/chat` selects an installed `MINICPM_PROJECT_PREFIX` model (default `minicpm-`), otherwise falls back to the configured base model.

@@ -73,3 +73,14 @@ def test_requests_are_counted_and_flushed_with_the_throttled_write(tmp_path, mon
         monkeypatch.setattr("tokens.time.time", lambda now=now: now)
         assert store.valid(token)
         assert store.list()[0]["requests"] == {1000: 1, 1010: 1, 1020: 1, 1060: 4}[now]
+
+
+def test_project_limit_is_stored_listed_and_returned_by_lookup(tmp_path):
+    store = TokenStore(tmp_path / "tokens.json")
+    scoped = store.create("a", ["b", "a", "b"])
+    unscoped = store.create("open")
+    assert scoped["projects"] == ["a", "b"] and "projects" not in unscoped and "hash" not in scoped
+    assert store.lookup(scoped["token"])["projects"] == ["a", "b"]
+    assert "projects" not in store.lookup(unscoped["token"])
+    assert store.lookup("nope") is None
+    assert [row.get("projects") for row in store.list()] == [["a", "b"], None]

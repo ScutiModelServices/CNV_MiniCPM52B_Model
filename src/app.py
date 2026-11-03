@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 import time
 from contextlib import asynccontextmanager
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -81,6 +81,7 @@ def _ollama_tool(tool: Tool) -> dict[str, Any]:
 
 class NewToken(BaseModel):
     name: str = Field(min_length=1, max_length=64)
+    projects: list[Annotated[str, Field(pattern=PROJECT_PATTERN)]] | None = Field(None, max_length=32)
 
 
 class Threads(BaseModel):
@@ -132,9 +133,18 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
                     pass
             await client.close()
 
-    def authorize(x_internal_token: str = Header("")) -> None:
-        if admin_password and not tokens.valid(x_internal_token):
+    def authorize(x_internal_token: str = Header("")) -> list[str] | None:
+        """The projects the token is limited to, or None for all. Unset admin password = no auth."""
+        if not admin_password:
+            return None
+        row = tokens.lookup(x_internal_token)
+        if row is None:
             raise HTTPException(401, "Invalid token")
+        return row.get("projects")
+
+    def check_scope(allowed: list[str] | None, project: str | None) -> None:
+        if project is not None and allowed is not None and project not in allowed:
+            raise HTTPException(403, f"This token may not use project {project!r}")
 
     def admin(x_internal_token: str = Header("")) -> None:
         if not admin_password or not hmac.compare_digest(x_internal_token, admin_password):
@@ -167,8 +177,9 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
                 "ready": client.model in names or f"{client.model}:latest" in names,
                 "num_thread": client.num_thread, "project_models": sorted(projects)}
 
-    @app.post("/v1/chat", dependencies=[Depends(authorize)])
-    async def chat(body: ChatRequest) -> dict[str, Any]:
+    @app.post("/v1/chat")
+    async def chat(body: ChatRequest, allowed: list[str] | None = Depends(authorize)) -> dict[str, Any]:
+        check_scope(allowed, body.project)
         if body.tools and body.json_schema is not None:
             raise HTTPException(422, "Send either tools or a schema, not both")
         started = time.perf_counter()
@@ -251,7 +262,7 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
 
     @app.post("/admin/tokens", dependencies=[Depends(admin)])
     def create_token(body: NewToken) -> dict[str, Any]:
-        return tokens.create(body.name.strip())
+        return tokens.create(body.name.strip(), body.projects)
 
     @app.delete("/admin/tokens/{token_id}", dependencies=[Depends(admin)])
     def revoke_token(token_id: str) -> dict[str, bool]:

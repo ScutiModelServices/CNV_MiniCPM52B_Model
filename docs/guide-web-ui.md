@@ -83,3 +83,7 @@ set on the Ollama process itself (`OLLAMA_NUM_PARALLEL` in its environment).
 | Token lost | Revoke it and create a new one. |
 | `/health` shows `ready: false` | Ollama is up but the model is not pulled yet. See the run guide for `ollama pull`. |
 | Never expose port 9130 to the internet | It is a LAN tool; use a firewall or VPN for remote access. |
+
+## Limiting a token to projects
+
+When you create a token you can list the projects it may use (comma separated; empty = all). A request whose `project` is not on the list is refused with `403`. A request without `project` is always allowed. The list cannot be edited later: revoke the token and create a new one.

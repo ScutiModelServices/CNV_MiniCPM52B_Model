@@ -266,3 +266,24 @@ def test_main_wires_warmup_and_update_hours(monkeypatch, environment, expected):
     monkeypatch.setattr("uvicorn.run", lambda *args, **kw: None)
     app.main()
     assert (captured["warm"], captured["check_hours"]) == expected
+
+
+def test_a_token_limited_to_projects_refuses_other_projects(tmp_path):
+    from tokens import TokenStore
+
+    def handler(request):
+        return httpx.Response(200, json={"models": []}) if request.url.path == "/api/tags" else reply()
+
+    ollama = OllamaClient("http://ollama", "m", transport=httpx.MockTransport(handler))
+    c = TestClient(create_app(ollama, "admin", tokens=TokenStore(tmp_path / "t.json")))
+    admin = {"X-Internal-Token": "admin"}
+    assert c.post("/admin/tokens", json={"name": "x", "projects": ["Bad Name"]}, headers=admin).status_code == 422
+    made = c.post("/admin/tokens", json={"name": "p", "projects": ["app-b", "app-a"]}, headers=admin).json()
+    assert made["projects"] == ["app-a", "app-b"]
+    assert c.get("/admin/tokens", headers=admin).json()["tokens"][0]["projects"] == ["app-a", "app-b"]
+    use = {"X-Internal-Token": made["token"]}
+    assert c.post("/v1/chat", json={**BODY, "project": "app-a"}, headers=use).status_code == 200
+    assert c.post("/v1/chat", json={**BODY, "project": "other"}, headers=use).status_code == 403
+    assert c.post("/v1/chat", json=BODY, headers=use).status_code == 200  # no project is always allowed
+    open_token = c.post("/admin/tokens", json={"name": "all"}, headers=admin).json()["token"]
+    assert c.post("/v1/chat", json={**BODY, "project": "other"}, headers={"X-Internal-Token": open_token}).status_code == 200

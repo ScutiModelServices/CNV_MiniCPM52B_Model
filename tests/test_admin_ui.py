@@ -104,3 +104,16 @@ def test_updates_card_checks_and_downloads_without_replica_restart(page):
     sync_api.expect(page.locator("#update-note")).to_contain_text("All replicas use the new weights on their next request.")
     sync_api.expect(page.locator("#update-weights")).to_be_hidden()
     assert "Restart" not in page.locator("#update-note").inner_text()
+
+
+def test_token_can_be_limited_to_projects(page):
+    page.fill("#admin", PASSWORD)
+    page.click("#signin-button")
+    sync_api.expect(page.locator("#dashboard")).to_be_visible()
+    page.fill("#name", "Garrison")
+    page.fill("#projects", "Bad Name")
+    page.click("#create-button")
+    sync_api.expect(page.locator("#token-error")).to_contain_text("not valid")
+    page.fill("#projects", "app-a, app-b")
+    page.click("#create-button")
+    sync_api.expect(page.locator("#rows tr")).to_contain_text("Only: app-a, app-b")

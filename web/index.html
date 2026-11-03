@@ -122,6 +122,7 @@ td time { font-variant-numeric: tabular-nums; }
 .thread-label { margin-top: 18px; }
 .saved { color: var(--accent); font-size: .85em; min-height: 1.55em; margin-top: 6px; }
 .hint { padding: 0 4px; overflow-wrap: anywhere; }
+.scope { display: block; margin-top: 2px; color: var(--muted); font-size: .8em; }
 .update-list { list-style: none; margin: 14px 0; padding: 0; }
 .update-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .85em; overflow-wrap: anywhere; }
 .update-list .new { color: var(--warning); font-weight: 600; }
@@ -195,6 +196,7 @@ dialog p { overflow-wrap: anywhere; }
       <p class="description">Give each project its own access. Revoke a token to stop its requests.</p>
       <form id="create" class="create-form">
         <div class="field"><label for="name">Project name</label><input id="name" placeholder="e.g. Garrison" required maxlength="64" autocomplete="off"></div>
+        <div class="field"><label for="projects">Allowed projects</label><input id="projects" placeholder="All (or: app-a, app-b)" autocomplete="off"></div>
         <button id="create-button" class="primary">Create token</button>
       </form>
       <p id="token-error" class="error" role="alert"></p>
@@ -309,6 +311,7 @@ function signOut(focus = true) {
   $("signin").hidden = false;
   $("admin").value = "";
   $("name").value = "";
+  $("projects").value = "";
   $("count").value = "";
   $("saved").textContent = "";
   $("update-list").replaceChildren();
@@ -396,6 +399,12 @@ function renderTokens(rows) {
         content.title = new Date(stamp * 1000).toLocaleString();
       }
       td.append(content);
+      if (label === "Project" && row.projects) {
+        const scope = document.createElement("small");
+        scope.className = "scope";
+        scope.textContent = "Only: " + row.projects.join(", ");
+        td.append(scope);
+      }
       tr.append(td);
     }
     const td = document.createElement("td");
@@ -519,15 +528,23 @@ $("create").onsubmit = async event => {
     $("name").focus();
     return;
   }
+  const projects = $("projects").value.split(",").map(item => item.trim()).filter(Boolean);
+  const bad = projects.find(item => !/^[a-z0-9][a-z0-9_-]{0,47}$/.test(item));
+  if (bad) {
+    $("token-error").textContent = "Project “" + bad + "” is not valid. Use lowercase letters, digits, - and _.";
+    $("projects").focus();
+    return;
+  }
   tokenVersion++;
   forgetToken();
   $("token-error").textContent = "";
   busy("create-button", true);
   try {
-    const made = await call("POST", "tokens", {name});
+    const made = await call("POST", "tokens", projects.length ? {name, projects} : {name});
     $("fresh-token").textContent = made.token;
     $("fresh").hidden = false;
     $("name").value = "";
+    $("projects").value = "";
     $("copy").focus();
     await refreshTokens();
   } catch (error) { report(error, "token-error"); }
