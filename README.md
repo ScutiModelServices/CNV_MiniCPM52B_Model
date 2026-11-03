@@ -8,8 +8,20 @@ and the caller runs the tools and the loop.
 
 | Call | Purpose |
 |---|---|
-| `POST /v1/chat` | `{"messages", "project", "tools", "schema", "thinking", "temperature", "max_tokens"}` → `{"content", "thinking", "tool_calls", "finish_reason", "model", "fallback", "usage", "duration_ms"}`. |
+| `POST /v1/chat` | `{"messages", "project", "tools", "schema", "thinking", "temperature", "max_tokens", "stream"}` → `{"content", "thinking", "tool_calls", "finish_reason", "model", "fallback", "usage", "duration_ms"}`. |
 | `GET /health` | `{"status": "ok", "model", "ready", "num_thread", "project_models"}`; `ready` checks the configured base model. `project_models` lists installed project model names. No token needed. |
+
+**Streaming.** With `"stream": true` the reply is `application/x-ndjson`: one JSON object per line while the answer is
+made, so the first words arrive at once instead of after the whole answer. Lines are `{"type": "content", "text"}`
+(and `{"type": "thinking", "text"}` while the model thinks) and finally `{"type": "done", ...}` holding the same body a call without `stream` returns. A refusal before
+the first piece (a conversation that is too long, a full queue) is still a normal HTTP error; a failure after it is
+sent as `{"type": "error", "status", ...}` and ends the stream. A kept answer (see below) is streamed back in one piece.
+
+**Cache.** The *Answers kept per replica* setting (`MINICPM_CACHE_SIZE`, default 256, 0 = off) keeps the last answers
+for identical requests and sends them again without generating (`X-Cache: hit`). Only requests with `temperature` 0
+(the default) are kept, because a higher temperature asks for a different answer each time. The key holds the model Ollama has for the project (its digest, read from the inventory at most every 30 seconds), so a replaced project model or newly pulled weights are not answered from the old cache. The cache is per
+replica, so with N replicas the hit rate is about 1/N. `stream` does not change the key: a streamed answer fills the
+cache for plain calls and the other way round.
 
 **Tool calling.** Send `tools` (`[{"name", "description", "parameters": <JSON schema>}]`). When the model wants a tool
 it answers `finish_reason: "tool_calls"` with `tool_calls: [{"id", "name", "arguments"}]`. Run them, append the

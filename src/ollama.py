@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import time
-from typing import Any
+from typing import Any, AsyncIterator
 from urllib.parse import quote
 
 import httpx
@@ -29,6 +30,8 @@ class OllamaClient:
         self._tags_lock = asyncio.Lock()
         self._tags: frozenset[str] = frozenset()
         self._tags_at: float | None = None
+        self._digests: dict[str, str] = {}
+        self.generation = 0  # part of the answer cache key; changes when the model is unloaded for new weights
         self._http = httpx.AsyncClient(base_url=url.rstrip("/"), timeout=timeout, transport=transport)
 
     async def close(self) -> None:
@@ -79,7 +82,12 @@ class OllamaClient:
 
     async def unload(self) -> None:
         """Unload the resident model so subsequent requests use the newly pulled weights."""
+        self.generation += 1
         await self._post("/api/chat", {"model": self.model, "messages": [], "stream": False, "keep_alive": 0})
+
+    def digest(self, name: str) -> str | None:
+        """The digest Ollama listed for `name` at the last inventory lookup, or None."""
+        return self._digests.get(name) or self._digests.get(f"{name}:latest") or None
 
     async def model_ready(self) -> bool:
         """True when Ollama answers and has the model pulled."""
@@ -115,13 +123,13 @@ class OllamaClient:
             except (ValueError, KeyError, TypeError) as error:
                 raise OllamaError("Ollama returned invalid model inventory") from error
             self._tags = names
+            self._digests = {entry["name"]: str(entry.get("digest") or "") for entry in entries}
             self._tags_at = time.monotonic()
             return names
 
-    async def chat(self, messages: list[dict[str, Any]], *, tools: list[dict[str, Any]] | None,
-                   schema: dict[str, Any] | None, thinking: bool, temperature: float, max_tokens: int,
-                   model: str | None = None) -> dict[str, Any]:
-        body: dict[str, Any] = {"model": model if model is not None else self.model, "messages": messages, "stream": False, "think": thinking,
+    def _chat_body(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None, schema: dict[str, Any] | None,
+                   thinking: bool, temperature: float, max_tokens: int, model: str | None, stream: bool) -> dict[str, Any]:
+        body: dict[str, Any] = {"model": model if model is not None else self.model, "messages": messages, "stream": stream, "think": thinking,
                                 "keep_alive": self._keep_alive,
                                 "options": {"temperature": temperature, "num_predict": max_tokens}}
         if self.num_thread:
@@ -130,7 +138,43 @@ class OllamaClient:
             body["tools"] = tools
         if schema is not None:
             body["format"] = schema
+        return body
+
+    async def chat(self, messages: list[dict[str, Any]], *, tools: list[dict[str, Any]] | None,
+                   schema: dict[str, Any] | None, thinking: bool, temperature: float, max_tokens: int,
+                   model: str | None = None) -> dict[str, Any]:
+        body = self._chat_body(messages, tools, schema, thinking, temperature, max_tokens, model, False)
         return await self._post("/api/chat", body, timeout=self._timeout)
+
+    async def chat_stream(self, messages: list[dict[str, Any]], *, tools: list[dict[str, Any]] | None,
+                          schema: dict[str, Any] | None, thinking: bool, temperature: float, max_tokens: int,
+                          model: str | None = None) -> AsyncIterator[dict[str, Any]]:
+        """Ollama's chunks as they arrive: `message` holds a piece of `content`, `thinking` or `tool_calls`; the last
+        chunk has `done` and the usage. The timeout applies to each wait for a chunk, not to the whole answer."""
+        body = self._chat_body(messages, tools, schema, thinking, temperature, max_tokens, model, True)
+        try:
+            async with self._http.stream("POST", "/api/chat", json=body, timeout=self._timeout) as response:
+                if not response.is_success:
+                    raw = await response.aread()
+                    try:
+                        detail = json.loads(raw).get("error")
+                    except ValueError:
+                        detail = None
+                    raise OllamaError(f"Ollama refused the request ({response.status_code}): {detail or raw[:200].decode('utf-8', 'replace')}",
+                                      response.status_code)
+                async for text in response.aiter_lines():
+                    if not text.strip():
+                        continue
+                    chunk = json.loads(text)
+                    if chunk.get("error"):
+                        raise OllamaError(f"Ollama refused the request: {chunk['error']}")
+                    yield chunk
+        except httpx.TimeoutException as error:
+            raise OllamaError("Ollama timed out", 504) from error
+        except httpx.HTTPError as error:
+            raise OllamaError(f"Ollama could not be reached: {error}") from error
+        except ValueError as error:
+            raise OllamaError("Ollama sent an unreadable answer") from error
 
     async def _post(self, path: str, body: dict[str, Any], *, timeout: float = 120.0) -> dict[str, Any]:
         """Apply the same timeout and error mapping to chat and model lifecycle calls."""
