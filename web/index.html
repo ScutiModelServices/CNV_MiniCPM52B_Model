@@ -232,7 +232,7 @@ dialog p { overflow-wrap: anywhere; }
     </section>
     <section id="updates-card" class="card" aria-labelledby="updates-title" hidden>
       <div class="section-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14"/></svg><h2 id="updates-title">Updates</h2></div>
-      <p class="description">Looks for a newer package on PyPI and newer weights on the Hugging Face Hub.</p>
+      <p id="updates-description" class="description">Looks for a newer package on PyPI and newer weights on the Hugging Face Hub.</p>
       <ul id="update-list" class="update-list"></ul>
       <div class="update-actions"><button id="check-updates" type="button">Check now</button><button id="update-weights" class="primary" type="button" hidden>Download new weights</button></div>
       <p id="update-note" class="description" role="status"></p>
@@ -250,7 +250,7 @@ dialog p { overflow-wrap: anywhere; }
 </dialog>
 <script>
 // Per-service configuration. The rest of this page is shared verbatim.
-const CONFIG = {title: "MiniCPM52BModel", address: location.origin, threadLabel: "Ollama CPU threads", threadField: "num_thread", adminEnv: "MINICPM_ADMIN_PASSWORD", replicasEnv: "MINICPM_REPLICAS", extraTile: {label: "Ollama parallel requests", field: "ollama_parallel"}, updates: false};
+const CONFIG = {title: "MiniCPM52BModel", address: location.origin, threadLabel: "Ollama CPU threads", threadField: "num_thread", adminEnv: "MINICPM_ADMIN_PASSWORD", replicasEnv: "MINICPM_REPLICAS", extraTile: {label: "Ollama parallel requests", field: "ollama_parallel"}, updates: true};
 
 const $ = id => document.getElementById(id);
 const storageKey = CONFIG.title + ":admin";
@@ -439,15 +439,16 @@ async function refreshHealth() {
     if (activeSession.signal.aborted) return;
   }
   if (activeSession.signal.aborted) return;
-  const state = !data || data.status !== "ok" ? "Unreachable" : CONFIG.extraTile && !data.ready ? "Starting" : "Healthy";
+  const state = !data || data.status !== "ok" ? "Unreachable" : data.model && !data.ready ? "Starting" : "Healthy";
   $("health").dataset.state = state;
   $("health-text").textContent = state;
   $("health-icon").setAttribute("d", state === "Healthy"
     ? "m8 12 3 3 5-6M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"
     : state === "Starting" ? "M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"
     : "m9 9 6 6m0-6-6 6M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0");
-  $("model-value").textContent = !data ? "—" : CONFIG.extraTile ? (data.ready ? "Ready" : "Starting")
-    : Object.values(data.models || {}).filter(Boolean).length + " / " + Object.keys(data.models || {}).length;
+  $("model-value").textContent = !data ? "—" : data.models
+    ? Object.values(data.models).filter(Boolean).length + " / " + Object.keys(data.models).length
+    : (data.ready ? "Ready" : "Starting");
   $("thread-value").textContent = data ? (data[CONFIG.threadField] ?? "Auto") : "—";
   if (data && !initializedThreads) {
     $("count").value = data[CONFIG.threadField] ?? "";
@@ -457,6 +458,7 @@ async function refreshHealth() {
 }
 function short(sha) { return sha ? sha.slice(0, 7) : "none"; }
 function renderUpdates(data) {
+  $("updates-description").textContent = data.description || "Looks for a newer package on PyPI and newer weights on the Hugging Face Hub.";
   const rows = [];
   if (data.package) rows.push([data.package.name + " package", data.package.installed + (data.package.update ? " → " + data.package.latest : ""), data.package.update]);
   for (const item of data.weights || []) rows.push([item.repo, short(item.cached) + (item.update ? " → " + short(item.latest) : ""), item.update]);
@@ -583,8 +585,9 @@ $("update-weights").onclick = async () => {
   $("updates-error").textContent = "";
   busy("update-weights", true);
   try {
-    renderUpdates(await call("POST", "updates/weights", undefined, 1800000));
-    $("update-note").textContent += " Weights downloaded; this replica loaded them. Restart the other replicas to load them too.";
+    const data = await call("POST", "updates/weights", undefined, 1800000);
+    renderUpdates(data);
+    if (!data.error) $("update-note").textContent += " " + (data.reload_note || "Weights downloaded; this replica loaded them. Restart the other replicas to load them too.");
   } catch (error) { report(error, "updates-error"); }
   finally { busy("update-weights", false); }
 };

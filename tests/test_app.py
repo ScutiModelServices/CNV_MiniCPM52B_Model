@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from app import create_app
@@ -179,3 +180,89 @@ def test_workers_are_read_only_and_admin_only(monkeypatch):
     c = client(lambda request: reply(), "admin")
     assert c.get("/admin/workers").status_code == 401
     assert c.get("/admin/workers", headers={"X-Internal-Token": "admin"}).json() == {"replicas": 3, "ollama_parallel": None}
+
+
+def test_saved_threads_are_loaded_only_by_main(tmp_path, monkeypatch):
+    import app
+    import settings
+    from tokens import TokenStore
+    store = TokenStore(tmp_path / "tokens.json")
+    settings.save(store.settings_path, num_thread=7)
+    monkeypatch.setenv("MINICPM_TOKENS_FILE", str(tmp_path / "tokens.json"))
+    monkeypatch.setenv("MINICPM_NUM_THREAD", "2")
+    backend = OllamaClient("http://ollama", "m")
+    create_app(backend, tokens=store)
+    assert backend.num_thread is None
+    captured = {}
+    monkeypatch.setattr(app, "create_app", lambda **kw: captured.update(kw) or object())
+    monkeypatch.setattr("uvicorn.run", lambda *args, **kw: None)
+    app.main()
+    assert captured["client"].num_thread == 7
+
+
+class WarmClient:
+    model = "m"
+    num_thread = None
+
+    def __init__(self, fail=False):
+        self.fail = fail
+        self.loaded = 0
+        self.closed = False
+
+    async def warm(self):
+        self.loaded += 1
+        if self.fail:
+            raise OSError("Ollama unavailable")
+
+    async def close(self):
+        self.closed = True
+
+
+def test_startup_warms_model_and_closes_client():
+    backend = WarmClient()
+    with TestClient(create_app(backend, warm=True)):
+        assert backend.loaded == 1
+    assert backend.closed
+
+
+def test_warmup_failure_is_logged_without_stopping_service(caplog):
+    backend = WarmClient(fail=True)
+    with TestClient(create_app(backend, warm=True)) as http:
+        assert http.get("/admin/").status_code == 200
+    assert "Ollama unavailable" in caplog.text
+    assert backend.closed
+
+
+def test_warmup_is_optional():
+    backend = WarmClient()
+    with TestClient(create_app(backend, warm=False)):
+        assert backend.loaded == 0
+    assert backend.closed
+
+
+def test_warmup_sends_empty_chat_with_long_keep_alive():
+    seen = []
+    def handler(request):
+        seen.append(json.loads(request.content))
+        return reply()
+    backend = OllamaClient("http://ollama", "m", transport=httpx.MockTransport(handler))
+    with TestClient(create_app(backend, warm=True)):
+        pass
+    assert len(seen) == 1
+    assert seen[0]["model"] == "m" and seen[0]["messages"] == []
+    assert seen[0]["keep_alive"] == "30m" and seen[0]["stream"] is False
+
+
+@pytest.mark.parametrize("environment,expected", [({}, (True, 6)),
+    ({"MINICPM_WARM": "0", "MINICPM_UPDATE_CHECK_HOURS": "0"}, (False, 0))])
+def test_main_wires_warmup_and_update_hours(monkeypatch, environment, expected):
+    import app
+    captured = {}
+    for name in ("MINICPM_WARM", "MINICPM_UPDATE_CHECK_HOURS"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(app, "create_app", lambda **kw: captured.update(kw) or object())
+    monkeypatch.setattr("uvicorn.run", lambda *args, **kw: None)
+    app.main()
+    assert (captured["warm"], captured["check_hours"]) == expected

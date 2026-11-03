@@ -7,6 +7,7 @@ returned parsed. Thinking is on unless the caller turns it off. GET /health repo
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import logging
@@ -23,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ollama import OllamaClient, OllamaError
 import settings
 from tokens import TokenStore
+from updates import Updates
 
 _log = logging.getLogger(__name__)
 
@@ -83,7 +85,8 @@ class Threads(BaseModel):
 
 
 def create_app(client: OllamaClient | None = None, admin_password: str | None = None,
-               tokens: TokenStore | None = None) -> FastAPI:
+               tokens: TokenStore | None = None, warm: bool = False,
+               updates: Updates | None = None, check_hours: float = 0) -> FastAPI:
     """`admin_password` (MINICPM_ADMIN_PASSWORD) unlocks /admin/, where each project gets a token of its own; when it
     is set, every call except /health must send one of those tokens in the X-Internal-Token header. Unset = no
     auth at all (local use only). `tokens` holds the project tokens (MINICPM_TOKENS_FILE)."""
@@ -91,10 +94,39 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
     client = client or OllamaClient(os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"),
                                     os.environ.get("MINICPM_MODEL", DEFAULT_MODEL))
 
+    updates = updates or Updates(client.model, cached_sha=lambda: client.cached_sha(), remote_sha=lambda: client.remote_sha(),
+                                 download=lambda: client.pull(), unload=lambda: client.unload())
+
+    async def check_forever() -> None:
+        while True:
+            try:
+                status = await updates.check()
+                if status["error"]:
+                    _log.warning("Update check failed: %s", status["error"])
+            except Exception:
+                _log.exception("Update check failed")
+            await asyncio.sleep(check_hours * 3600)
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        yield
-        await client.close()
+        background = None
+        try:
+            if warm:
+                try:
+                    await client.warm()
+                except Exception:
+                    _log.exception("Ollama warm-up failed; continuing startup")
+            if check_hours > 0:
+                background = asyncio.create_task(check_forever())
+            yield
+        finally:
+            if background is not None:
+                background.cancel()
+                try:
+                    await background
+                except asyncio.CancelledError:
+                    pass
+            await client.close()
 
     def authorize(x_internal_token: str = Header("")) -> None:
         if admin_password and not tokens.valid(x_internal_token):
@@ -103,10 +135,6 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
     def admin(x_internal_token: str = Header("")) -> None:
         if not admin_password or not hmac.compare_digest(x_internal_token, admin_password):
             raise HTTPException(401, "Admin password required (set MINICPM_ADMIN_PASSWORD)")
-
-    threads = settings.load(tokens.settings_path).get("num_thread") or os.environ.get("MINICPM_NUM_THREAD", "").strip()
-    if threads:
-        client.num_thread = int(threads)
 
     app = FastAPI(title="MiniCPM5-2B service", lifespan=lifespan)
 
@@ -168,6 +196,23 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
 
         return {"replicas": number("MINICPM_REPLICAS"), "ollama_parallel": number("OLLAMA_NUM_PARALLEL")}
 
+    @app.get("/admin/updates", dependencies=[Depends(admin)])
+    async def update_status() -> dict[str, Any]:
+        """Return the last check without I/O; zero check hours disables only the timer."""
+        return {"enabled": True, **updates.status()}
+
+    @app.post("/admin/updates/check", dependencies=[Depends(admin)])
+    async def check_updates() -> dict[str, Any]:
+        return {"enabled": True, **await updates.check()}
+
+    @app.post("/admin/updates/weights", dependencies=[Depends(admin)])
+    async def update_weights() -> dict[str, Any]:
+        try:
+            return {"enabled": True, **await updates.update_weights()}
+        except Exception as error:
+            _log.exception("Weight update failed")
+            raise HTTPException(502, f"Weight update failed: {error}") from None
+
     @app.get("/admin/tokens", dependencies=[Depends(admin)])
     def list_tokens() -> dict[str, Any]:
         return {"tokens": tokens.list()}
@@ -192,7 +237,15 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
 def main() -> None:
     import uvicorn
 
-    app = create_app(admin_password=os.environ.get("MINICPM_ADMIN_PASSWORD") or None)
+    client = OllamaClient(os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"),
+                          os.environ.get("MINICPM_MODEL", DEFAULT_MODEL))
+    saved = settings.load(TokenStore(os.environ.get("MINICPM_TOKENS_FILE", "tokens.json")).settings_path)
+    threads = saved.get("num_thread") or os.environ.get("MINICPM_NUM_THREAD", "").strip()
+    if threads:
+        client.num_thread = int(threads)
+    app = create_app(client=client, admin_password=os.environ.get("MINICPM_ADMIN_PASSWORD") or None,
+                     warm=os.environ.get("MINICPM_WARM", "1") == "1",
+                     check_hours=float(os.environ.get("MINICPM_UPDATE_CHECK_HOURS", "6") or 0))
     uvicorn.run(app, host=os.environ.get("MINICPM_HOST", "127.0.0.1"), port=int(os.environ.get("MINICPM_PORT", "9130")))
 
 

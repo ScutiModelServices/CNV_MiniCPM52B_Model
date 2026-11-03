@@ -43,6 +43,8 @@ changing the replica count, run `docker compose restart minicpm_lb`.
 
 ### Guides
 
+- [Deployment reference](deployment.md): settings, first start, scaling, updates and troubleshooting
+
 - [Docker on the same device](docs/guide-docker-same-device.md)
 - [Docker on a deployment device](docs/guide-docker-deployment-device.md)
 - [Without Docker on the same device](docs/guide-no-docker-same-device.md)

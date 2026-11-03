@@ -2,6 +2,7 @@
 
 Needs `pip install playwright && playwright install chromium`; skipped when Playwright is missing.
 """
+import hashlib
 import socket
 import threading
 import time
@@ -21,7 +22,21 @@ PASSWORD = "secret"
 
 @pytest.fixture
 def base_url():
-    ollama = OllamaClient("http://ollama", "m", transport=httpx.MockTransport(lambda request: httpx.Response(200, json={})))
+    manifest = b'{"schemaVersion":2,"config":{},"layers":[]}'
+    digest = hashlib.sha256(manifest).hexdigest()
+    state = {"pulled": False}
+
+    def handler(request):
+        if request.url.host == "registry.ollama.ai":
+            return httpx.Response(200, content=manifest)
+        if request.url.path == "/api/tags":
+            models = [{"name": "m:latest", "digest": digest}] if state["pulled"] else []
+            return httpx.Response(200, json={"models": models})
+        if request.url.path == "/api/pull":
+            state["pulled"] = True
+        return httpx.Response(200, json={"status": "success"})
+
+    ollama = OllamaClient("http://ollama", "m", transport=httpx.MockTransport(handler))
     app = create_app(ollama, PASSWORD)
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -67,3 +82,25 @@ def test_create_and_revoke_a_token(page):
     row.get_by_role("button", name="Revoke").click()
     page.click("#confirm-revoke")
     sync_api.expect(page.locator("#empty")).to_be_visible()
+
+
+def test_health_keeps_backend_specific_model_display(page):
+    page.fill("#admin", PASSWORD)
+    page.click("#signin-button")
+    sync_api.expect(page.locator("#model-value")).to_have_text("Starting")
+    sync_api.expect(page.locator("#health-text")).to_have_text("Starting")
+
+
+def test_updates_card_checks_and_downloads_without_replica_restart(page):
+    page.fill("#admin", PASSWORD)
+    page.click("#signin-button")
+    sync_api.expect(page.locator("#updates-card")).to_be_visible()
+    sync_api.expect(page.locator("#updates-description")).to_contain_text("without downloading")
+    sync_api.expect(page.locator("#update-note")).to_have_text("Not checked yet.")
+    page.click("#check-updates")
+    sync_api.expect(page.locator("#update-weights")).to_be_visible()
+    sync_api.expect(page.locator("#update-list")).to_contain_text("m")
+    page.click("#update-weights")
+    sync_api.expect(page.locator("#update-note")).to_contain_text("All replicas use the new weights on their next request.")
+    sync_api.expect(page.locator("#update-weights")).to_be_hidden()
+    assert "Restart" not in page.locator("#update-note").inner_text()
