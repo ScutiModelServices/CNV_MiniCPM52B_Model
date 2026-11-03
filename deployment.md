@@ -24,6 +24,7 @@ MiniCPM52BModel serves MiniCPM5-2B over HTTP on port 9130. FastAPI replicas (`mi
 | `OLLAMA_MAX_LOADED_MODELS` | `1` in Compose | Maximum resident models on Ollama; more models need more RAM. For local runs set this on the Ollama process. |
 | `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama endpoint; Compose sets `http://ollama:11434`. |
 | `MINICPM_UPDATE_CHECK_HOURS` | `6` | Check remote model manifests at startup and every N hours; `0` disables automatic checks. Manual checks remain available. |
+| `MINICPM_MAX_INFLIGHT` | 4 x `OLLAMA_NUM_PARALLEL` | Calls one replica lets wait on Ollama at once. More get `429` with `Retry-After: 5` instead of timing out. An Ollama `503` (its own queue is full) also becomes `429`. |
 | `MINICPM_WARM` | `1` | Load the model at startup with an empty chat and a 30-minute keep-alive. `0` leaves loading to the first request. Failure is logged and does not stop the API. |
 | `MINICPM_NUM_THREAD` | Ollama decides | CPU threads per request; Compose sets `4`. Admin changes are saved and override this at next start. Other replicas apply them on restart. |
 | `OLLAMA_NUM_PARALLEL` | `2` in Compose | Parallel generations on the shared Ollama host; shown read-only in `/admin/`. |

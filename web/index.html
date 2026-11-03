@@ -123,6 +123,9 @@ td time { font-variant-numeric: tabular-nums; }
 .saved { color: var(--accent); font-size: .85em; min-height: 1.55em; margin-top: 6px; }
 .hint { padding: 0 4px; overflow-wrap: anywhere; }
 .scope { display: block; margin-top: 2px; color: var(--muted); font-size: .8em; }
+.row-actions { display: flex; flex-direction: column; gap: 6px; }
+dialog .field + .field { margin-top: 12px; }
+dialog input { width: 100%; }
 .update-list { list-style: none; margin: 14px 0; padding: 0; }
 .update-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .85em; overflow-wrap: anywhere; }
 .update-list .new { color: var(--warning); font-weight: 600; }
@@ -197,6 +200,8 @@ dialog p { overflow-wrap: anywhere; }
       <form id="create" class="create-form">
         <div class="field"><label for="name">Project name</label><input id="name" placeholder="e.g. Garrison" required maxlength="64" autocomplete="off"></div>
         <div class="field"><label for="projects">Allowed projects</label><input id="projects" placeholder="All (or: app-a, app-b)" autocomplete="off"></div>
+        <div class="field"><label for="rate">Requests per minute</label><input id="rate" type="number" min="1" max="100000" step="1" placeholder="Unlimited"></div>
+        <div class="field"><label for="expires">Expires in (days)</label><input id="expires" type="number" min="1" max="3650" step="1" placeholder="Never"></div>
         <button id="create-button" class="primary">Create token</button>
       </form>
       <p id="token-error" class="error" role="alert"></p>
@@ -232,6 +237,12 @@ dialog p { overflow-wrap: anywhere; }
       <p id="saved" class="saved" role="status"></p>
       <p id="threads-error" class="error" role="alert"></p>
     </section>
+    <section class="card" aria-labelledby="models-title">
+      <div class="section-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5ZM3 13l9 5 9-5"/></svg><h2 id="models-title">Project models</h2></div>
+      <p class="description">Models loaded for one project, as seen by the replica that answered. A project without one uses the base model.</p>
+      <ul id="project-models" class="update-list"></ul>
+      <p id="project-models-empty" class="description">None loaded.</p>
+    </section>
     <section id="updates-card" class="card" aria-labelledby="updates-title" hidden>
       <div class="section-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14"/></svg><h2 id="updates-title">Updates</h2></div>
       <p id="updates-description" class="description">Looks for a newer package on PyPI and newer weights on the Hugging Face Hub.</p>
@@ -244,6 +255,15 @@ dialog p { overflow-wrap: anywhere; }
   </section>
 </div>
 </main>
+<dialog id="edit-dialog" aria-labelledby="edit-title">
+  <h2 id="edit-title">Edit token</h2>
+  <form id="edit-form">
+    <div class="field"><label for="edit-projects">Allowed projects</label><input id="edit-projects" placeholder="All (or: app-a, app-b)" autocomplete="off"></div>
+    <div class="field"><label for="edit-rate">Requests per minute</label><input id="edit-rate" type="number" min="1" max="100000" step="1" placeholder="Unlimited"></div>
+    <p id="edit-error" class="error" role="alert"></p>
+    <div class="dialog-actions"><button id="cancel-edit" type="button">Cancel</button><button id="save-edit" class="primary">Save</button></div>
+  </form>
+</dialog>
 <dialog id="revoke-dialog" aria-labelledby="revoke-title" aria-describedby="revoke-message">
   <h2 id="revoke-title">Revoke token?</h2>
   <p id="revoke-message"></p>
@@ -257,7 +277,7 @@ const CONFIG = {title: "MiniCPM52BModel", address: location.origin, threadLabel:
 const $ = id => document.getElementById(id);
 const storageKey = CONFIG.title + ":admin";
 let admin = "", session = new AbortController(), poll, polling = false, initializedThreads = false;
-let tokenRows = [], pendingRevoke = null, savedTimer, copyTimer, tokenVersion = 0;
+let tokenRows = [], pendingRevoke = null, pendingEdit = null, savedTimer, copyTimer, tokenVersion = 0;
 let theme = "system";
 try { theme = localStorage.getItem("admin-theme") || "system"; } catch {}
 if (!["system", "light", "dark"].includes(theme)) theme = "system";
@@ -312,6 +332,11 @@ function signOut(focus = true) {
   $("admin").value = "";
   $("name").value = "";
   $("projects").value = "";
+  $("rate").value = "";
+  $("expires").value = "";
+  $("edit-dialog").close();
+  pendingEdit = null;
+  $("project-models").replaceChildren();
   $("count").value = "";
   $("saved").textContent = "";
   $("update-list").replaceChildren();
@@ -364,6 +389,42 @@ function relative(seconds) {
     if (count) return count + " " + unit + (count === 1 ? "" : "s") + " ago";
   }
 }
+function parseProjects(value) {
+  const list = value.split(",").map(item => item.trim()).filter(Boolean);
+  const bad = list.find(item => !/^[a-z0-9][a-z0-9_-]{0,47}$/.test(item));
+  return {list, error: bad ? "Project “" + bad + "” is not valid. Use lowercase letters, digits, - and _." : ""};
+}
+function scopeText(row) {
+  const parts = [];
+  if (row.projects) parts.push("Only: " + row.projects.join(", "));
+  if (row.rate) parts.push(row.rate + "/min");
+  if (row.expires) parts.push(row.expires * 1000 <= Date.now() ? "Expired" : "Expires " + new Date(row.expires * 1000).toLocaleDateString());
+  return parts.join(" · ");
+}
+function statsText(row) {
+  return row.timed ? "Errors " + (row.errors || 0) + " · avg " + Math.round((row.latency_ms || 0) / row.timed) + " ms" : "";
+}
+function setNote(td, text) {
+  let note = td.querySelector(".scope");
+  if (!text) { if (note) note.remove(); return; }
+  if (!note) {
+    note = document.createElement("small");
+    note.className = "scope";
+    td.append(note);
+  }
+  note.textContent = text;
+}
+function renderProjectModels(data) {
+  const models = data && data.project_models ? (Array.isArray(data.project_models) ? data.project_models : Object.keys(data.project_models)) : [];
+  $("project-models").replaceChildren(...models.map(name => {
+    const li = document.createElement("li"), span = document.createElement("span");
+    span.textContent = name;
+    span.className = "mono";
+    li.append(span);
+    return li;
+  }));
+  $("project-models-empty").hidden = models.length > 0;
+}
 function renderTokens(rows) {
   tokenRows = rows;
   $("token-count").textContent = rows.length;
@@ -380,6 +441,8 @@ function renderTokens(rows) {
         used.title = new Date(row.last_used * 1000).toLocaleString();
       }
       previous.children[3].firstElementChild.textContent = row.requests;
+      setNote(previous.children[0], scopeText(row));
+      setNote(previous.children[3], statsText(row));
       return previous;
     }
     const tr = document.createElement("tr");
@@ -399,12 +462,7 @@ function renderTokens(rows) {
         content.title = new Date(stamp * 1000).toLocaleString();
       }
       td.append(content);
-      if (label === "Project" && row.projects) {
-        const scope = document.createElement("small");
-        scope.className = "scope";
-        scope.textContent = "Only: " + row.projects.join(", ");
-        td.append(scope);
-      }
+      setNote(td, label === "Project" ? scopeText(row) : label === "Requests" ? statsText(row) : "");
       tr.append(td);
     }
     const td = document.createElement("td");
@@ -419,7 +477,21 @@ function renderTokens(rows) {
       $("revoke-error").textContent = "";
       $("revoke-dialog").showModal();
     };
-    td.append(button);
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "Edit";
+    edit.setAttribute("aria-label", "Edit token for " + row.name);
+    edit.onclick = () => {
+      pendingEdit = tokenRows.find(token => token.id === row.id) || row;
+      $("edit-projects").value = (pendingEdit.projects || []).join(", ");
+      $("edit-rate").value = pendingEdit.rate || "";
+      $("edit-error").textContent = "";
+      $("edit-dialog").showModal();
+    };
+    const actions = document.createElement("div");
+    actions.className = "row-actions";
+    actions.append(edit, button);
+    td.append(actions);
     tr.append(td);
     return tr;
   });
@@ -459,6 +531,7 @@ async function refreshHealth() {
     ? Object.values(data.models).filter(Boolean).length + " / " + Object.keys(data.models).length
     : (data.ready ? "Ready" : "Starting");
   $("thread-value").textContent = data ? (data[CONFIG.threadField] ?? "Auto") : "—";
+  renderProjectModels(data);
   if (data && !initializedThreads) {
     $("count").value = data[CONFIG.threadField] ?? "";
     $("slider").value = data[CONFIG.threadField] ?? 1;
@@ -528,10 +601,12 @@ $("create").onsubmit = async event => {
     $("name").focus();
     return;
   }
-  const projects = $("projects").value.split(",").map(item => item.trim()).filter(Boolean);
-  const bad = projects.find(item => !/^[a-z0-9][a-z0-9_-]{0,47}$/.test(item));
-  if (bad) {
-    $("token-error").textContent = "Project “" + bad + "” is not valid. Use lowercase letters, digits, - and _.";
+  const parsed = parseProjects($("projects").value), projects = parsed.list;
+  const invalid = parsed.error
+    || (!$("rate").validity.valid && "Requests per minute must be a whole number from 1 to 100000.")
+    || (!$("expires").validity.valid && "Expiry must be a whole number of days from 1 to 3650.");
+  if (invalid) {
+    $("token-error").textContent = invalid;
     $("projects").focus();
     return;
   }
@@ -540,11 +615,15 @@ $("create").onsubmit = async event => {
   $("token-error").textContent = "";
   busy("create-button", true);
   try {
-    const made = await call("POST", "tokens", projects.length ? {name, projects} : {name});
+    const made = await call("POST", "tokens", {name, ...(projects.length ? {projects} : {}),
+      ...($("rate").value ? {rate: Number($("rate").value)} : {}),
+      ...($("expires").value ? {expires_days: Number($("expires").value)} : {})});
     $("fresh-token").textContent = made.token;
     $("fresh").hidden = false;
     $("name").value = "";
     $("projects").value = "";
+    $("rate").value = "";
+    $("expires").value = "";
     $("copy").focus();
     await refreshTokens();
   } catch (error) { report(error, "token-error"); }
@@ -607,6 +686,26 @@ $("update-weights").onclick = async () => {
     if (!data.error) $("update-note").textContent += " " + (data.reload_note || "Weights downloaded; this replica loaded them. Restart the other replicas to load them too.");
   } catch (error) { report(error, "updates-error"); }
   finally { busy("update-weights", false); }
+};
+$("cancel-edit").onclick = () => $("edit-dialog").close();
+$("edit-form").onsubmit = async event => {
+  event.preventDefault();
+  if (!pendingEdit) return;
+  const parsed = parseProjects($("edit-projects").value);
+  if (parsed.error || !$("edit-rate").validity.valid) {
+    $("edit-error").textContent = parsed.error || "Requests per minute must be a whole number from 1 to 100000.";
+    return;
+  }
+  tokenVersion++;
+  busy("save-edit", true);
+  $("edit-error").textContent = "";
+  try {
+    await call("PUT", "tokens/" + encodeURIComponent(pendingEdit.id),
+      {projects: parsed.list.length ? parsed.list : null, rate: $("edit-rate").value ? Number($("edit-rate").value) : null});
+    $("edit-dialog").close();
+    await refreshTokens();
+  } catch (error) { report(error, $("edit-dialog").open ? "edit-error" : "token-error"); }
+  finally { busy("save-edit", false); }
 };
 $("cancel-revoke").onclick = () => $("revoke-dialog").close();
 $("revoke-dialog").onclick = event => {

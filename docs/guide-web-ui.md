@@ -87,3 +87,12 @@ set on the Ollama process itself (`OLLAMA_NUM_PARALLEL` in its environment).
 ## Limiting a token to projects
 
 When you create a token you can list the projects it may use (comma separated; empty = all). A request whose `project` is not on the list is refused with `403`. A request without `project` is always allowed. The list cannot be edited later: revoke the token and create a new one.
+
+## Rate limit, expiry, edits, usage and metrics
+
+- **Requests per minute** (optional, when creating or editing a token): over the limit a call gets `429` with `Retry-After`. The count is per replica, so with several replicas behind the balancer the real limit can be up to that many times higher.
+- **Expires in (days)** (optional, only when creating): after that the token is refused like a revoked one, and the row shows "Expired". Create a new token to continue.
+- **Edit** changes the allowed projects and the rate limit without revoking the token.
+- **Usage:** each row shows errors (answers with status 500 or above) and the average time per call. The counters are written at most once a minute.
+- **Metrics:** `GET /metrics` (send the admin password in `X-Internal-Token`) returns the same numbers as Prometheus text, one series per token. It reads the shared token file, so any replica answers with the same data.
+- **Project models** card: the models loaded for a single project on the replica that answered.

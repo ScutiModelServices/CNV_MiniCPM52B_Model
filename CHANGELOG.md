@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tokens: edit the project list and a calls-per-minute limit without revoking (`PUT /admin/tokens/{id}`), optional expiry, per-token errors and average time on the admin page, and `GET /metrics` (Prometheus text). Over the rate limit a call gets `429` with `Retry-After`.
+- Admin page: **Project models** card.
+- `MINICPM_MAX_INFLIGHT` (default 4 x `OLLAMA_NUM_PARALLEL`) caps calls waiting on Ollama per replica; more get `429`, as does an Ollama `503`.
+
 - Tokens can be limited to a list of projects (set on the admin page when creating one). Another project is `403`; no `project` is always allowed.
 
 ## 1.1.0

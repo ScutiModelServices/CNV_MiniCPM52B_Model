@@ -42,6 +42,7 @@ services:
       OLLAMA_URL: http://ollama:11434
       MINICPM_UPDATE_CHECK_HOURS: ${MINICPM_UPDATE_CHECK_HOURS:-6}
       MINICPM_WARM: ${MINICPM_WARM:-1}
+      MINICPM_MAX_INFLIGHT: ${MINICPM_MAX_INFLIGHT:-}  # calls one replica lets wait on Ollama; empty = 4 x OLLAMA_NUM_PARALLEL
       MINICPM_NUM_THREAD: ${MINICPM_NUM_THREAD:-4}
       MINICPM_REPLICAS: ${MINICPM_REPLICAS:-1}  # shown read-only on /admin/
       OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-2}  # same value Ollama runs with; shown read-only on /admin/

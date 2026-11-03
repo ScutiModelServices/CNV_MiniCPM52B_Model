@@ -117,3 +117,23 @@ def test_token_can_be_limited_to_projects(page):
     page.fill("#projects", "app-a, app-b")
     page.click("#create-button")
     sync_api.expect(page.locator("#rows tr")).to_contain_text("Only: app-a, app-b")
+
+
+def test_token_can_be_edited_and_shows_rate_and_expiry(page):
+    page.fill("#admin", PASSWORD)
+    page.click("#signin-button")
+    sync_api.expect(page.locator("#dashboard")).to_be_visible()
+    sync_api.expect(page.locator("#project-models-empty")).to_be_visible()
+    page.fill("#name", "Garrison")
+    page.fill("#rate", "5")
+    page.fill("#expires", "30")
+    page.click("#create-button")
+    row = page.locator("#rows tr")
+    sync_api.expect(row).to_contain_text("5/min")
+    sync_api.expect(row).to_contain_text("Expires")
+    row.get_by_role("button", name="Edit").click()
+    page.fill("#edit-projects", "app-a")
+    page.fill("#edit-rate", "")
+    page.click("#save-edit")
+    sync_api.expect(row).to_contain_text("Only: app-a")
+    sync_api.expect(row).not_to_contain_text("5/min")

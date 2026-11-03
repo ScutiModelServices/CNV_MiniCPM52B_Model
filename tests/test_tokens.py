@@ -84,3 +84,56 @@ def test_project_limit_is_stored_listed_and_returned_by_lookup(tmp_path):
     assert "projects" not in store.lookup(unscoped["token"])
     assert store.lookup("nope") is None
     assert [row.get("projects") for row in store.list()] == [["a", "b"], None]
+
+
+def test_expired_token_is_invalid_but_still_listed(tmp_path, monkeypatch):
+    store = TokenStore(tmp_path / "tokens.json")
+    monkeypatch.setattr("tokens.time.time", lambda: 1000)
+    made = store.create("short", expires_days=1)
+    assert made["expires"] == 1000 + 86400 and store.valid(made["token"])
+    monkeypatch.setattr("tokens.time.time", lambda: 1000 + 86400)
+    assert not store.valid(made["token"])
+    assert store.list()[0]["expires"] == 1000 + 86400
+
+
+def test_update_replaces_projects_and_rate(tmp_path):
+    store = TokenStore(tmp_path / "tokens.json")
+    made = store.create("p", ["a"], rate=5)
+    assert store.update(made["id"], ["c", "b"], None)
+    row = store.list()[0]
+    assert row["projects"] == ["b", "c"] and "rate" not in row
+    assert store.update(made["id"], None, 7)
+    row = store.list()[0]
+    assert "projects" not in row and row["rate"] == 7
+    assert not store.update("nope", None, None)
+
+
+def test_throttle_allows_the_rate_per_minute(tmp_path, monkeypatch):
+    store = TokenStore(tmp_path / "tokens.json")
+    clock = [100.0]
+    monkeypatch.setattr("tokens.time.monotonic", lambda: clock[0])
+    row = {"id": "x", "rate": 2}
+    assert store.throttle(row) is None and store.throttle(row) is None
+    clock[0] = 130.0
+    assert store.throttle(row) == 31
+    clock[0] = 161.0
+    assert store.throttle(row) is None
+    assert store.throttle({"id": "y"}) is None  # no rate = unlimited
+
+
+def test_record_is_written_once_a_minute_and_exported(tmp_path, monkeypatch):
+    store = TokenStore(tmp_path / "tokens.json")
+    made = store.create('proj "x"')
+    clock = [1000]
+    monkeypatch.setattr("tokens.time.time", lambda: clock[0])
+    store.record(made["id"], 100, False)  # the first call is written at once
+    assert store.list()[0]["timed"] == 1
+    clock[0] = 1030
+    store.record(made["id"], 300, True)
+    assert store.list()[0]["timed"] == 1  # held back until a minute passed
+    clock[0] = 1061
+    store.record(made["id"], 200, False)
+    row = store.list()[0]
+    assert (row["timed"], row["errors"], row["latency_ms"]) == (3, 1, 600)
+    text = store.metrics("svc")
+    assert 'svc_errors_total{token="proj \\"x\\""} 1' in text and "svc_latency_ms_sum" in text

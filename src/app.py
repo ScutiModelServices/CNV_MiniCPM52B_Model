@@ -18,8 +18,10 @@ import time
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 
 from ollama import OllamaClient, OllamaError
@@ -82,6 +84,13 @@ def _ollama_tool(tool: Tool) -> dict[str, Any]:
 class NewToken(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     projects: list[Annotated[str, Field(pattern=PROJECT_PATTERN)]] | None = Field(None, max_length=32)
+    rate: int | None = Field(None, ge=1, le=100_000)  # calls per minute
+    expires_days: int | None = Field(None, ge=1, le=3650)
+
+
+class TokenScope(BaseModel):
+    projects: list[Annotated[str, Field(pattern=PROJECT_PATTERN)]] | None = Field(None, max_length=32)
+    rate: int | None = Field(None, ge=1, le=100_000)
 
 
 class Threads(BaseModel):
@@ -90,7 +99,7 @@ class Threads(BaseModel):
 
 def create_app(client: OllamaClient | None = None, admin_password: str | None = None,
                tokens: TokenStore | None = None, warm: bool = False,
-               updates: Updates | None = None, check_hours: float = 0) -> FastAPI:
+               updates: Updates | None = None, check_hours: float = 0, max_inflight: int | None = None) -> FastAPI:
     """`admin_password` (MINICPM_ADMIN_PASSWORD) unlocks /admin/, where each project gets a token of its own; when it
     is set, every call except /health must send one of those tokens in the X-Internal-Token header. Unset = no
     auth at all (local use only). `tokens` holds the project tokens (MINICPM_TOKENS_FILE)."""
@@ -98,6 +107,10 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
     client = client or OllamaClient(os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"),
                                     os.environ.get("MINICPM_MODEL", DEFAULT_MODEL))
     project_prefix = os.environ.get("MINICPM_PROJECT_PREFIX", "minicpm-")
+    # Calls this replica lets wait on Ollama at once (MINICPM_MAX_INFLIGHT, default 4 x OLLAMA_NUM_PARALLEL); more get 429.
+    limit = max_inflight if max_inflight is not None else int(
+        os.environ.get("MINICPM_MAX_INFLIGHT") or 4 * int(os.environ.get("OLLAMA_NUM_PARALLEL") or 2))
+    inflight = 0
 
     updates = updates or Updates(client.model, cached_sha=lambda: client.cached_sha(), remote_sha=lambda: client.remote_sha(),
                                  download=lambda: client.pull(), unload=lambda: client.unload())
@@ -133,13 +146,17 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
                     pass
             await client.close()
 
-    def authorize(x_internal_token: str = Header("")) -> list[str] | None:
+    def authorize(request: Request, x_internal_token: str = Header("")) -> list[str] | None:
         """The projects the token is limited to, or None for all. Unset admin password = no auth."""
         if not admin_password:
             return None
         row = tokens.lookup(x_internal_token)
         if row is None:
             raise HTTPException(401, "Invalid token")
+        wait = tokens.throttle(row)
+        if wait:
+            raise HTTPException(429, "Too many requests for this token", headers={"Retry-After": str(wait)})
+        request.state.token_id = row["id"]
         return row.get("projects")
 
     def check_scope(allowed: list[str] | None, project: str | None) -> None:
@@ -151,6 +168,16 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
             raise HTTPException(401, "Admin password required (set MINICPM_ADMIN_PASSWORD)")
 
     app = FastAPI(title="MiniCPM5-2B service", lifespan=lifespan)
+
+    async def slot():
+        nonlocal inflight
+        if limit and inflight >= limit:
+            raise HTTPException(429, "MiniCPM is busy: too many requests waiting", headers={"Retry-After": "5"})
+        inflight += 1
+        try:
+            yield
+        finally:
+            inflight -= 1
 
     async def installed(name: str) -> bool:
         """Is `name` pulled? A miss re-asks Ollama (at most every 2 s) so a model made just now is found.
@@ -178,7 +205,7 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
                 "num_thread": client.num_thread, "project_models": sorted(projects)}
 
     @app.post("/v1/chat")
-    async def chat(body: ChatRequest, allowed: list[str] | None = Depends(authorize)) -> dict[str, Any]:
+    async def chat(body: ChatRequest, allowed: list[str] | None = Depends(authorize), _slot: None = Depends(slot)) -> dict[str, Any]:
         check_scope(allowed, body.project)
         if body.tools and body.json_schema is not None:
             raise HTTPException(422, "Send either tools or a schema, not both")
@@ -199,6 +226,8 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
         except OllamaError as error:
             if error.status == 400:
                 raise HTTPException(422, str(error)) from None
+            if error.status == 503:  # Ollama's own queue is full
+                raise HTTPException(429, str(error), headers={"Retry-After": "5"}) from None
             raise HTTPException(504 if error.status == 504 else 502, str(error)) from None
         except Exception:
             _log.exception("MiniCPM chat failed")
@@ -262,7 +291,27 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
 
     @app.post("/admin/tokens", dependencies=[Depends(admin)])
     def create_token(body: NewToken) -> dict[str, Any]:
-        return tokens.create(body.name.strip(), body.projects)
+        return tokens.create(body.name.strip(), body.projects, body.rate, body.expires_days)
+
+    @app.put("/admin/tokens/{token_id}", dependencies=[Depends(admin)])
+    def update_token(token_id: str, body: TokenScope) -> dict[str, bool]:
+        if not tokens.update(token_id, body.projects, body.rate):
+            raise HTTPException(404, "No such token")
+        return {"ok": True}
+
+    @app.middleware("http")
+    async def measure(request: Request, call_next):
+        started = time.perf_counter()
+        response = await call_next(request)
+        token_id = getattr(request.state, "token_id", None)
+        if token_id:
+            await run_in_threadpool(tokens.record, token_id, (time.perf_counter() - started) * 1000, response.status_code >= 500)
+        return response
+
+    @app.get("/metrics", dependencies=[Depends(admin)])
+    def metrics() -> PlainTextResponse:
+        """Prometheus text per token, from the shared token file (up to a minute behind). Send the admin password."""
+        return PlainTextResponse(tokens.metrics("minicpm"))
 
     @app.delete("/admin/tokens/{token_id}", dependencies=[Depends(admin)])
     def revoke_token(token_id: str) -> dict[str, bool]:

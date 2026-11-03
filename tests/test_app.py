@@ -287,3 +287,53 @@ def test_a_token_limited_to_projects_refuses_other_projects(tmp_path):
     assert c.post("/v1/chat", json=BODY, headers=use).status_code == 200  # no project is always allowed
     open_token = c.post("/admin/tokens", json={"name": "all"}, headers=admin).json()["token"]
     assert c.post("/v1/chat", json={**BODY, "project": "other"}, headers={"X-Internal-Token": open_token}).status_code == 200
+
+
+def test_rate_limit_edit_stats_and_metrics(tmp_path):
+    from tokens import TokenStore
+    store = TokenStore(tmp_path / "t.json")
+    ollama = OllamaClient("http://ollama", "m", transport=httpx.MockTransport(lambda request: reply()))
+    c = TestClient(create_app(ollama, "admin", tokens=store))
+    admin = {"X-Internal-Token": "admin"}
+    made = c.post("/admin/tokens", json={"name": "p", "rate": 1}, headers=admin).json()
+    assert made["rate"] == 1
+    use = {"X-Internal-Token": made["token"]}
+    assert c.post("/v1/chat", json=BODY, headers=use).status_code == 200
+    limited = c.post("/v1/chat", json=BODY, headers=use)
+    assert limited.status_code == 429 and int(limited.headers["Retry-After"]) >= 1
+    assert c.put(f"/admin/tokens/{made['id']}", json={"projects": ["a"], "rate": None}, headers=admin).status_code == 200
+    assert c.post("/v1/chat", json=BODY, headers=use).status_code == 200  # the limit is gone
+    assert c.put("/admin/tokens/nope", json={}, headers=admin).status_code == 404
+    row = store.list()[0]
+    assert row["projects"] == ["a"] and "rate" not in row and row["timed"] >= 1
+    assert c.get("/metrics").status_code == 401
+    assert 'minicpm_requests_total{token="p"}' in c.get("/metrics", headers=admin).text
+
+
+def test_requests_over_the_in_flight_limit_get_429():
+    import asyncio
+
+    async def main():
+        release = asyncio.Event()
+
+        async def handler(request):
+            await release.wait()
+            return reply()
+
+        ollama = OllamaClient("http://ollama", "m", transport=httpx.MockTransport(handler))
+        app = create_app(ollama, max_inflight=1)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://svc") as http:
+            first = asyncio.create_task(http.post("/v1/chat", json=BODY))
+            await asyncio.sleep(0.2)
+            second = await http.post("/v1/chat", json=BODY)
+            release.set()
+            return second, await first
+
+    second, first = asyncio.run(main())
+    assert second.status_code == 429 and second.headers["Retry-After"] == "5"
+    assert first.status_code == 200
+
+
+def test_a_full_ollama_queue_becomes_429():
+    response = client(lambda request: httpx.Response(503, text="server busy")).post("/v1/chat", json=BODY)
+    assert response.status_code == 429 and response.headers["Retry-After"] == "5"
