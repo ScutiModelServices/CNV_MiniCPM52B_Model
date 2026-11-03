@@ -187,3 +187,7 @@ official release, `--replace` can move its tags.
 
 `tools\make_zip.bat` builds `zip_versions\MiniCPM52BModel-<VERSION>.zip` and opens GitHub's new-release page.
 The archive excludes development tools, ignored files and old ZIPs; its example configuration is included.
+
+## Settings on the admin page
+
+These are edited on the **Settings** card of `/admin/` and saved in `settings.json` beside the tokens, so all replicas share them: `MINICPM_UPDATE_CHECK_HOURS`, `MINICPM_MAX_INFLIGHT`, `MINICPM_PROJECT_PREFIX`, `MINICPM_MODEL` and `MINICPM_WARM` (the last two are read at start). A saved value beats the environment variable. The compose file no longer passes them, except `MINICPM_MODEL`, which the one-time `minicpm_pull` container also uses. After you change the base model and restart, pull it from the Updates card. Still in `.env`: `MINICPM_ADMIN_PASSWORD`, `MINICPM_PORT`, `MINICPM_REPLICAS`, `MINICPM_NUM_THREAD` (a starting value for the CPU threads card) and `OLLAMA_NUM_PARALLEL`.

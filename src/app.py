@@ -25,13 +25,13 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 
 from ollama import OllamaClient, OllamaError
+from options import DEFAULT_MODEL, SETTINGS
 import settings
 from tokens import TokenStore
 from updates import Updates
 
 _log = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M"
 PROJECT_PATTERN = r"^[a-z0-9][a-z0-9_-]{0,47}$"
 
 
@@ -81,6 +81,10 @@ def _ollama_tool(tool: Tool) -> dict[str, Any]:
     return {"type": "function", "function": tool.model_dump()}
 
 
+class SettingsUpdate(BaseModel):
+    values: dict[str, Any]  # None resets an option to its environment variable or default
+
+
 class NewToken(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     projects: list[Annotated[str, Field(pattern=PROJECT_PATTERN)]] | None = Field(None, max_length=32)
@@ -99,42 +103,56 @@ class Threads(BaseModel):
 
 def create_app(client: OllamaClient | None = None, admin_password: str | None = None,
                tokens: TokenStore | None = None, warm: bool = False,
-               updates: Updates | None = None, check_hours: float = 0, max_inflight: int | None = None) -> FastAPI:
+               updates: Updates | None = None, check_hours: float = 0, max_inflight: int | None = None,
+               config: settings.Config | None = None) -> FastAPI:
     """`admin_password` (MINICPM_ADMIN_PASSWORD) unlocks /admin/, where each project gets a token of its own; when it
     is set, every call except /health must send one of those tokens in the X-Internal-Token header. Unset = no
-    auth at all (local use only). `tokens` holds the project tokens (MINICPM_TOKENS_FILE)."""
+    auth at all (local use only). `tokens` holds the project tokens (MINICPM_TOKENS_FILE). `config` (the admin page's
+    settings) replaces `warm`, `check_hours` and `max_inflight` and keeps them live; without it they stay fixed."""
     tokens = tokens or TokenStore(os.environ.get("MINICPM_TOKENS_FILE", "tokens.json"))
     client = client or OllamaClient(os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"),
-                                    os.environ.get("MINICPM_MODEL", DEFAULT_MODEL))
-    project_prefix = os.environ.get("MINICPM_PROJECT_PREFIX", "minicpm-")
-    # Calls this replica lets wait on Ollama at once (MINICPM_MAX_INFLIGHT, default 4 x OLLAMA_NUM_PARALLEL); more get 429.
-    limit = max_inflight if max_inflight is not None else int(
-        os.environ.get("MINICPM_MAX_INFLIGHT") or 4 * int(os.environ.get("OLLAMA_NUM_PARALLEL") or 2))
+                                    config.get("model") if config else os.environ.get("MINICPM_MODEL", DEFAULT_MODEL))
+
+    def prefix() -> str:
+        return config.get("project_prefix") if config else os.environ.get("MINICPM_PROJECT_PREFIX", "minicpm-")
+
     inflight = 0
+
+    def inflight_limit() -> int:
+        """Calls this replica lets wait on Ollama at once; more get 429. 0 = 4 x OLLAMA_NUM_PARALLEL."""
+        value = config.get("max_inflight") if config else (
+            max_inflight if max_inflight is not None else int(os.environ.get("MINICPM_MAX_INFLIGHT") or 0))
+        return value or 4 * int(os.environ.get("OLLAMA_NUM_PARALLEL") or 2)
 
     updates = updates or Updates(client.model, cached_sha=lambda: client.cached_sha(), remote_sha=lambda: client.remote_sha(),
                                  download=lambda: client.pull(), unload=lambda: client.unload())
 
     async def check_forever() -> None:
+        """Checks every `update_check_hours` (0 = off). The value is read again every second, so the admin page can change it."""
+        last = None
         while True:
-            try:
-                status = await updates.check()
-                if status["error"]:
-                    _log.warning("Update check failed: %s", status["error"])
-            except Exception:
-                _log.exception("Update check failed")
-            await asyncio.sleep(check_hours * 3600)
+            wait = (config.get("update_check_hours") if config else check_hours) * 3600
+            now = time.monotonic()
+            if wait > 0 and (last is None or now - last >= wait):
+                last = now
+                try:
+                    status = await updates.check()
+                    if status["error"]:
+                        _log.warning("Update check failed: %s", status["error"])
+                except Exception:
+                    _log.exception("Update check failed")
+            await asyncio.sleep(min(wait, 1.0) if wait > 0 else 1.0)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         background = None
         try:
-            if warm:
+            if config.get("warm") if config else warm:
                 try:
                     await client.warm()
                 except Exception:
                     _log.exception("Ollama warm-up failed; continuing startup")
-            if check_hours > 0:
+            if config or check_hours > 0:
                 background = asyncio.create_task(check_forever())
             yield
         finally:
@@ -171,6 +189,7 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
 
     async def slot():
         nonlocal inflight
+        limit = inflight_limit()
         if limit and inflight >= limit:
             raise HTTPException(429, "MiniCPM is busy: too many requests waiting", headers={"Retry-After": "5"})
         inflight += 1
@@ -197,9 +216,10 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
             names = await client.installed_models(max_age=0)
         except OllamaError:
             names = frozenset()
+        current = prefix()
         projects = {name.removesuffix(":latest") for name in names
-                    if name.startswith(project_prefix)
-                    and re.fullmatch(PROJECT_PATTERN, name.removesuffix(":latest")[len(project_prefix):])}
+                    if name.startswith(current)
+                    and re.fullmatch(PROJECT_PATTERN, name.removesuffix(":latest")[len(current):])}
         return {"status": "ok", "model": client.model,
                 "ready": client.model in names or f"{client.model}:latest" in names,
                 "num_thread": client.num_thread, "project_models": sorted(projects)}
@@ -214,7 +234,7 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
             model = client.model
             fallback = False
             if body.project is not None:
-                candidate = project_prefix + body.project
+                candidate = prefix() + body.project
                 if await installed(candidate):
                     model = candidate
                 else:
@@ -293,6 +313,22 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
     def create_token(body: NewToken) -> dict[str, Any]:
         return tokens.create(body.name.strip(), body.projects, body.rate, body.expires_days)
 
+    @app.get("/admin/settings", dependencies=[Depends(admin)])
+    def get_settings() -> dict[str, Any]:
+        return {"settings": config.describe() if config else []}
+
+    @app.put("/admin/settings", dependencies=[Depends(admin)])
+    def put_settings(body: SettingsUpdate) -> dict[str, Any]:
+        """Saves options; null resets one. Every replica reads the shared file, so a change applies everywhere within
+        a second, except options marked `restart`."""
+        if config is None:
+            raise HTTPException(409, "Settings are fixed in this setup")
+        try:
+            config.set(body.values)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+        return {"settings": config.describe()}
+
     @app.put("/admin/tokens/{token_id}", dependencies=[Depends(admin)])
     def update_token(token_id: str, body: TokenScope) -> dict[str, bool]:
         if not tokens.update(token_id, body.projects, body.rate):
@@ -329,15 +365,15 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
 def main() -> None:
     import uvicorn
 
-    client = OllamaClient(os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"),
-                          os.environ.get("MINICPM_MODEL", DEFAULT_MODEL))
-    saved = settings.load(TokenStore(os.environ.get("MINICPM_TOKENS_FILE", "tokens.json")).settings_path)
+    store = TokenStore(os.environ.get("MINICPM_TOKENS_FILE", "tokens.json"))
+    config = settings.Config(store.settings_path, SETTINGS)
+    client = OllamaClient(os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"), config.get("model"))
+    saved = settings.load(store.settings_path)
     threads = saved.get("num_thread") or os.environ.get("MINICPM_NUM_THREAD", "").strip()
     if threads:
         client.num_thread = int(threads)
     app = create_app(client=client, admin_password=os.environ.get("MINICPM_ADMIN_PASSWORD") or None,
-                     warm=os.environ.get("MINICPM_WARM", "1") == "1",
-                     check_hours=float(os.environ.get("MINICPM_UPDATE_CHECK_HOURS", "6") or 0))
+                     tokens=store, config=config)
     uvicorn.run(app, host=os.environ.get("MINICPM_HOST", "127.0.0.1"), port=int(os.environ.get("MINICPM_PORT", "9130")))
 
 

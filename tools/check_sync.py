@@ -8,7 +8,7 @@ import re
 import sys
 from pathlib import Path
 
-SHARED = ("web/index.html", "src/tokens.py")
+SHARED = ("web/index.html", "src/tokens.py", "src/settings.py")
 ALLOWED = re.compile(r"^(PREFIX = |const CONFIG = )")  # per-project: token prefix and page config
 
 

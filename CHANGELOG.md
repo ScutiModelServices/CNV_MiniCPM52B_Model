@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Settings** card on `/admin/`: the update interval, cache and limits, project options and similar are saved in `settings.json`, beat the environment variable and apply on every replica within seconds (`GET` and `PUT /admin/settings`). The compose file no longer passes these; the admin password, ports, replica count and Docker settings stay in `.env`.
+
 - Tokens: edit the project list and a calls-per-minute limit without revoking (`PUT /admin/tokens/{id}`), optional expiry, per-token errors and average time on the admin page, and `GET /metrics` (Prometheus text). Over the rate limit a call gets `429` with `Retry-After`.
 - Admin page: **Project models** card.
 - `MINICPM_MAX_INFLIGHT` (default 4 x `OLLAMA_NUM_PARALLEL`) caps calls waiting on Ollama per replica; more get `429`, as does an Ollama `503`.

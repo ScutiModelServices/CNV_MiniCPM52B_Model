@@ -265,7 +265,8 @@ def test_main_wires_warmup_and_update_hours(monkeypatch, environment, expected):
     monkeypatch.setattr(app, "create_app", lambda **kw: captured.update(kw) or object())
     monkeypatch.setattr("uvicorn.run", lambda *args, **kw: None)
     app.main()
-    assert (captured["warm"], captured["check_hours"]) == expected
+    config = captured["config"]
+    assert (config.get("warm"), config.get("update_check_hours")) == expected
 
 
 def test_a_token_limited_to_projects_refuses_other_projects(tmp_path):
@@ -337,3 +338,36 @@ def test_requests_over_the_in_flight_limit_get_429():
 def test_a_full_ollama_queue_becomes_429():
     response = client(lambda request: httpx.Response(503, text="server busy")).post("/v1/chat", json=BODY)
     assert response.status_code == 429 and response.headers["Retry-After"] == "5"
+
+
+def test_settings_are_admin_only_checked_and_apply_live(tmp_path):
+    from options import SETTINGS
+    from settings import Config
+    from tokens import TokenStore
+    config = Config(tmp_path / "s.json", SETTINGS)
+    models = []
+
+    def handler(request):
+        if request.url.path == "/api/tags":
+            return httpx.Response(200, json={"models": [{"name": "acme-demo"}]})
+        models.append(json.loads(request.content)["model"])
+        return reply()
+
+    ollama = OllamaClient("http://ollama", "m", transport=httpx.MockTransport(handler))
+    c = TestClient(create_app(ollama, "admin", tokens=TokenStore(tmp_path / "t.json"), config=config))
+    admin = {"X-Internal-Token": "admin"}
+    assert c.get("/admin/settings").status_code == 401
+    rows = {row["key"]: row for row in c.get("/admin/settings", headers=admin).json()["settings"]}
+    assert rows["project_prefix"]["value"] == "minicpm-" and rows["model"]["restart"] is True
+    use = {"X-Internal-Token": c.post("/admin/tokens", json={"name": "p"}, headers=admin).json()["token"]}
+    put = lambda values: c.put("/admin/settings", json={"values": values}, headers=admin)  # noqa: E731
+    assert c.post("/v1/chat", json={**BODY, "project": "demo"}, headers=use).json()["fallback"] is True
+    assert put({"project_prefix": "acme-"}).status_code == 200
+    body = c.post("/v1/chat", json={**BODY, "project": "demo"}, headers=use).json()
+    assert body["model"] == "acme-demo" and body["fallback"] is False
+    assert put({"max_inflight": -1}).status_code == 422 and put({"model": ""}).status_code == 422
+    assert put({"nope": 1}).status_code == 422
+    assert put({"project_prefix": None}).json()["settings"][2]["source"] == "default"
+    fixed = TestClient(create_app(OllamaClient("http://ollama", "m", transport=httpx.MockTransport(handler)), "admin"))
+    assert fixed.get("/admin/settings", headers=admin).json() == {"settings": []}
+    assert fixed.put("/admin/settings", json={"values": {}}, headers=admin).status_code == 409

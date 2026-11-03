@@ -14,7 +14,12 @@ sync_api = pytest.importorskip("playwright.sync_api")
 
 import httpx
 
+import os
+from pathlib import Path
+
 from app import create_app
+from options import SETTINGS
+from settings import Config
 from ollama import OllamaClient
 
 PASSWORD = "secret"
@@ -37,7 +42,9 @@ def base_url():
         return httpx.Response(200, json={"status": "success"})
 
     ollama = OllamaClient("http://ollama", "m", transport=httpx.MockTransport(handler))
-    app = create_app(ollama, PASSWORD)
+    config = Config(Path(os.environ["MINICPM_TOKENS_FILE"]).with_name("settings.json"), SETTINGS)
+    config.set({"update_check_hours": 0, "warm": False})
+    app = create_app(ollama, PASSWORD, config=config)
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
@@ -137,3 +144,17 @@ def test_token_can_be_edited_and_shows_rate_and_expiry(page):
     page.click("#save-edit")
     sync_api.expect(row).to_contain_text("Only: app-a")
     sync_api.expect(row).not_to_contain_text("5/min")
+
+
+def test_settings_can_be_saved_and_reset(page):
+    page.fill("#admin", PASSWORD)
+    page.click("#signin-button")
+    sync_api.expect(page.locator("#settings-card")).to_be_visible()
+    box = page.locator("#setting-max_inflight")
+    sync_api.expect(box).to_have_value("0")
+    box.fill("3")
+    page.click("#save-settings")
+    sync_api.expect(page.locator("#settings-note")).to_have_text("Saved")
+    sync_api.expect(page.locator("#setting-max_inflight")).to_have_value("3")
+    page.get_by_role("button", name="Reset Calls allowed to wait on Ollama").click()
+    sync_api.expect(page.locator("#setting-max_inflight")).to_have_value("0")

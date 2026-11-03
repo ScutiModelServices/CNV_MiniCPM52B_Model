@@ -124,6 +124,12 @@ td time { font-variant-numeric: tabular-nums; }
 .hint { padding: 0 4px; overflow-wrap: anywhere; }
 .scope { display: block; margin-top: 2px; color: var(--muted); font-size: .8em; }
 .row-actions { display: flex; flex-direction: column; gap: 6px; }
+.setting { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.setting-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.setting label { margin-bottom: 4px; }
+.setting input[type="number"], .setting input[type="text"] { width: 100%; }
+.setting button { min-height: 32px; padding: 3px 10px; font-size: .8em; }
+#save-settings { margin-top: 16px; }
 dialog .field + .field { margin-top: 12px; }
 dialog input { width: 100%; }
 .update-list { list-style: none; margin: 14px 0; padding: 0; }
@@ -251,6 +257,16 @@ dialog p { overflow-wrap: anywhere; }
       <p id="update-note" class="description" role="status"></p>
       <p id="updates-error" class="error" role="alert"></p>
     </section>
+    <section id="settings-card" class="card" aria-labelledby="settings-title" hidden>
+      <div class="section-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10m4 0h2M4 17h2m4 0h10M14 4v6M6 14v6"/></svg><h2 id="settings-title">Settings</h2></div>
+      <p class="description">A value saved here beats the environment variable. Reset goes back to it. Every replica picks a change up within a few seconds.</p>
+      <form id="settings-form">
+        <div id="settings-list"></div>
+        <button id="save-settings" class="primary">Save changes</button>
+      </form>
+      <p id="settings-note" class="saved" role="status"></p>
+      <p id="settings-error" class="error" role="alert"></p>
+    </section>
     <p id="workers" class="hint"></p>
   </section>
 </div>
@@ -277,7 +293,7 @@ const CONFIG = {title: "MiniCPM52BModel", address: location.origin, threadLabel:
 const $ = id => document.getElementById(id);
 const storageKey = CONFIG.title + ":admin";
 let admin = "", session = new AbortController(), poll, polling = false, initializedThreads = false;
-let tokenRows = [], pendingRevoke = null, pendingEdit = null, savedTimer, copyTimer, tokenVersion = 0;
+let tokenRows = [], pendingRevoke = null, pendingEdit = null, settingRows = [], settingsTimer, savedTimer, copyTimer, tokenVersion = 0;
 let theme = "system";
 try { theme = localStorage.getItem("admin-theme") || "system"; } catch {}
 if (!["system", "light", "dark"].includes(theme)) theme = "system";
@@ -337,11 +353,16 @@ function signOut(focus = true) {
   $("edit-dialog").close();
   pendingEdit = null;
   $("project-models").replaceChildren();
+  $("settings-list").replaceChildren();
+  $("settings-card").hidden = true;
+  settingRows = [];
+  clearTimeout(settingsTimer);
+  $("settings-note").textContent = "";
   $("count").value = "";
   $("saved").textContent = "";
   $("update-list").replaceChildren();
   $("update-note").textContent = "";
-  for (const id of ["login-error", "page-error", "token-error", "threads-error", "revoke-error", "updates-error"]) $(id).textContent = "";
+  for (const id of ["login-error", "page-error", "token-error", "threads-error", "revoke-error", "updates-error", "settings-error"]) $(id).textContent = "";
   initializedThreads = false;
   if (focus) $("admin").focus();
 }
@@ -371,7 +392,7 @@ async function call(method, path, body, timeout = 10000) {
   const data = await response.json().catch(() => ({}));
   if (activeSession.signal.aborted) throw new DOMException("Signed out", "AbortError");
   if (!response.ok) {
-    const message = response.status === 502 && typeof data.detail === "string" ? data.detail
+    const message = (response.status === 502 || response.status === 422) && typeof data.detail === "string" ? data.detail
       : response.status === 401
       ? "Wrong admin password. Check the password and that " + CONFIG.adminEnv + " is set on the server."
       : "Request failed (" + response.status + "). Check the service and try again.";
@@ -562,6 +583,75 @@ function renderUpdates(data) {
 async function refreshUpdates() {
   if (CONFIG.updates) renderUpdates(await call("GET", "updates"));
 }
+function renderSettings(rows) {
+  settingRows = rows;
+  $("settings-card").hidden = !rows.length;
+  $("settings-list").replaceChildren(...rows.map(row => {
+    const box = document.createElement("div"), top = document.createElement("div");
+    const label = document.createElement("label"), reset = document.createElement("button");
+    const input = document.createElement("input"), note = document.createElement("small");
+    box.className = "setting";
+    top.className = "setting-top";
+    input.id = "setting-" + row.key;
+    label.htmlFor = input.id;
+    label.textContent = row.label;
+    reset.type = "button";
+    reset.textContent = "Reset";
+    reset.hidden = row.source !== "saved";
+    reset.setAttribute("aria-label", "Reset " + row.label);
+    reset.onclick = () => saveSettings({[row.key]: null});
+    if (row.kind === "bool") {
+      input.type = "checkbox";
+      input.checked = !!row.value;
+    } else if (row.kind === "text") {
+      input.type = "text";
+      input.value = row.value;
+      input.autocomplete = "off";
+    } else {
+      input.type = "number";
+      input.step = row.kind === "int" ? "1" : "any";
+      if (row.minimum != null) input.min = row.minimum;
+      if (row.maximum != null) input.max = row.maximum;
+      input.value = row.value;
+    }
+    note.className = "scope";
+    note.textContent = [row.help, "From " + row.source + (row.restart ? " · applies after a restart" : "")].filter(Boolean).join(" · ");
+    top.append(label, reset);
+    box.append(top, input, note);
+    return box;
+  }));
+}
+function settingValue(row) {
+  const input = $("setting-" + row.key);
+  if (row.kind === "bool") return input.checked;
+  if (row.kind === "text") return input.value.trim();
+  return input.value === "" ? null : Number(input.value);
+}
+async function saveSettings(values) {
+  $("settings-error").textContent = "";
+  $("settings-note").textContent = "";
+  busy("save-settings", true);
+  try {
+    renderSettings((await call("PUT", "settings", {values})).settings);
+    $("settings-note").textContent = "Saved";
+    clearTimeout(settingsTimer);
+    settingsTimer = setTimeout(() => { $("settings-note").textContent = ""; }, 3000);
+  } catch (error) { report(error, "settings-error"); }
+  finally { busy("save-settings", false); }
+}
+$("settings-form").onsubmit = event => {
+  event.preventDefault();
+  const values = {};
+  for (const row of settingRows) {
+    const value = settingValue(row);
+    if (value !== null && value !== row.value) values[row.key] = value;
+  }
+  if (Object.keys(values).length) saveSettings(values);
+  else $("settings-note").textContent = "Nothing changed";
+};
+async function refreshSettings() {
+  renderSettings((await call("GET", "settings")).settings);
+}
 async function pollStatus() {
   if (polling || !admin) return;
   polling = true;
@@ -585,7 +675,7 @@ async function signIn(password) {
     $("signin").hidden = true;
     $("dashboard").hidden = false;
     $("signout").focus();
-    await Promise.all([refreshHealth(), refreshWorkers().catch(error => report(error, "page-error")), refreshUpdates().catch(error => report(error, "page-error"))]);
+    await Promise.all([refreshHealth(), refreshWorkers().catch(error => report(error, "page-error")), refreshUpdates().catch(error => report(error, "page-error")), refreshSettings().catch(error => report(error, "page-error"))]);
     if (admin) poll = setInterval(pollStatus, 10000);
   } catch (error) {
     try { sessionStorage.removeItem(storageKey); } catch {}

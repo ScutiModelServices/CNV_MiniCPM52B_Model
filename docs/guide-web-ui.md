@@ -96,3 +96,7 @@ When you create a token you can list the projects it may use (comma separated; e
 - **Usage:** each row shows errors (answers with status 500 or above) and the average time per call. The counters are written at most once a minute.
 - **Metrics:** `GET /metrics` (send the admin password in `X-Internal-Token`) returns the same numbers as Prometheus text, one series per token. It reads the shared token file, so any replica answers with the same data.
 - **Project models** card: the models loaded for a single project on the replica that answered.
+
+## Settings
+
+The **Settings** card changes options without editing `.env` or restarting: update-check interval, caches and limits, and similar. Each row shows where its value comes from (saved, environment or default). A value saved here beats the environment variable; **Reset** removes it. Every replica reads the shared settings file, so a change applies within a few seconds. Rows marked "applies after a restart" are read once at start. The admin password, ports, replica count and other Docker settings stay in `.env` or the compose file, because the service cannot change its own container.
