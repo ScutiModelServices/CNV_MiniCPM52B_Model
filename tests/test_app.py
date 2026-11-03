@@ -371,3 +371,21 @@ def test_settings_are_admin_only_checked_and_apply_live(tmp_path):
     fixed = TestClient(create_app(OllamaClient("http://ollama", "m", transport=httpx.MockTransport(handler)), "admin"))
     assert fixed.get("/admin/settings", headers=admin).json() == {"settings": []}
     assert fixed.put("/admin/settings", json={"values": {}}, headers=admin).status_code == 409
+
+
+def test_a_saved_thread_count_reaches_other_replicas(tmp_path):
+    import time
+    import settings
+    from options import SETTINGS
+    from tokens import TokenStore
+    store = TokenStore(tmp_path / "t.json")
+    config = settings.Config(store.settings_path, SETTINGS)
+    config.set({"update_check_hours": 0, "warm": False})
+    ollama = OllamaClient("http://ollama", "m", transport=httpx.MockTransport(lambda request: reply()))
+    with TestClient(create_app(ollama, "admin", tokens=store, config=config)):
+        settings.save(store.settings_path, num_thread=6)
+        for _ in range(300):
+            if ollama.num_thread == 6:
+                break
+            time.sleep(0.02)
+    assert ollama.num_thread == 6

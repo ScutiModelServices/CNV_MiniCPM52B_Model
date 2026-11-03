@@ -1,7 +1,5 @@
-"""Settings changed on the admin page, kept in a JSON file beside the tokens so they survive a restart.
-
-shortcut: read once at start, so replicas sharing the file pick a change up when they restart; upgrade to
-reading per request if live sync across replicas matters."""
+"""Settings changed on the admin page, kept in a JSON file beside the tokens so they survive a restart and every
+replica sees them."""
 
 from __future__ import annotations
 

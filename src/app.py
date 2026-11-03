@@ -143,9 +143,17 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
                     _log.exception("Update check failed")
             await asyncio.sleep(min(wait, 1.0) if wait > 0 else 1.0)
 
+    async def threads_forever() -> None:
+        """Applies a CPU thread count saved from another replica's admin page."""
+        while True:
+            saved = settings.load(tokens.settings_path).get("num_thread")
+            if saved and saved != client.num_thread:
+                client.num_thread = int(saved)
+            await asyncio.sleep(1)
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        background = None
+        background: list[asyncio.Task] = []
         try:
             if config.get("warm") if config else warm:
                 try:
@@ -153,13 +161,15 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
                 except Exception:
                     _log.exception("Ollama warm-up failed; continuing startup")
             if config or check_hours > 0:
-                background = asyncio.create_task(check_forever())
+                background.append(asyncio.create_task(check_forever()))
+            if config:
+                background.append(asyncio.create_task(threads_forever()))
             yield
         finally:
-            if background is not None:
-                background.cancel()
+            for task in background:
+                task.cancel()
                 try:
-                    await background
+                    await task
                 except asyncio.CancelledError:
                     pass
             await client.close()
@@ -274,7 +284,7 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
 
     @app.put("/admin/threads", dependencies=[Depends(admin)])
     def set_threads(body: Threads) -> dict[str, Any]:
-        """Applies to this replica now and is saved; other replicas pick it up when they restart. It beats MINICPM_NUM_THREAD."""
+        """Applies to this replica now and is saved; the other replicas apply it within a few seconds. It beats MINICPM_NUM_THREAD."""
         client.num_thread = body.num_thread
         settings.save(tokens.settings_path, num_thread=body.num_thread)
         return {"num_thread": client.num_thread}

@@ -58,7 +58,7 @@ cache error, set PowerShell `$env:UV_CACHE_DIR = "D:/User/.uv-cache"` and retry.
 
 1. Compose starts `ollama` and waits for its health check.
 2. `minicpm_pull` downloads the model into the shared `ollama` volume and exits successfully.
-3. `minicpm` replicas start after that pull completes and warm the model unless `MINICPM_WARM=0`. Their HTTP health checks let `minicpm_lb` start.
+3. `minicpm` replicas start after that pull completes and warm the model unless warm-up is turned off on the Settings card. Their HTTP health checks let `minicpm_lb` start.
 
 The model volume survives rebuilds. The pull can take time on a slow connection; inspect
 `docker compose logs minicpm_pull` and `docker compose ps` before retrying.
