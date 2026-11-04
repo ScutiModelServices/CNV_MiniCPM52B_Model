@@ -311,6 +311,7 @@ def test_rate_limit_edit_stats_and_metrics(tmp_path):
     assert row["projects"] == ["a"] and "rate" not in row and row["timed"] >= 1
     assert c.get("/metrics").status_code == 401
     assert 'minicpm_requests_total{token="p"}' in c.get("/metrics", headers=admin).text
+    assert 'minicpm_request_seconds_bucket{le="+Inf"}' in c.get("/metrics", headers=admin).text
 
 
 def test_requests_over_the_in_flight_limit_get_429():

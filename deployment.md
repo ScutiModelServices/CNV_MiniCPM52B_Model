@@ -16,6 +16,8 @@ MiniCPM52BModel serves MiniCPM5-2B over HTTP on port 9130. FastAPI replicas (`mi
 | Variable | Default | Effect |
 |---|---|---|
 | `MINICPM_REPLICAS` | `1` | Number of API containers, read by Compose and shown read-only in `/admin/`. |
+| `OLLAMA_MEM_LIMIT` | `0` (no cap) | RAM cap for the Ollama container, for example `6g`. Read by Compose. |
+| `OLLAMA_KEEP_ALIVE` | `5m` | How long Ollama keeps an idle model in RAM before it frees it. Read by Compose. |
 | `MINICPM_PORT` | `9130` | Published nginx port; containers always listen on 9130. Also the local service port. |
 | `MINICPM_HOST` | `127.0.0.1` | Local bind address; the Dockerfile sets `0.0.0.0`. |
 | `MINICPM_ADMIN_PASSWORD` | empty | Unlocks `/admin/` and enables project-token auth. Empty means no auth; use only locally. |
@@ -26,7 +28,7 @@ MiniCPM52BModel serves MiniCPM5-2B over HTTP on port 9130. FastAPI replicas (`mi
 | `MINICPM_UPDATE_CHECK_HOURS` | `6` | Check remote model manifests at startup and every N hours; `0` disables automatic checks. Manual checks remain available. |
 | `MINICPM_MAX_INFLIGHT` | 4 x `OLLAMA_NUM_PARALLEL` | Calls one replica lets wait on Ollama at once. More get `429` with `Retry-After: 5` instead of timing out. An Ollama `503` (its own queue is full) also becomes `429`. |
 | `MINICPM_WARM` | `1` | Load the model at startup with an empty chat and a 30-minute keep-alive. `0` leaves loading to the first request. Failure is logged and does not stop the API. |
-| `MINICPM_NUM_THREAD` | Ollama decides | CPU threads per request; Compose sets `4`. Admin changes are saved and override this at next start. Other replicas apply them on restart. |
+| `MINICPM_NUM_THREAD` | Ollama decides | CPU threads per request; Compose sets `4`. Admin changes are saved and override this at next start. Other replicas apply them on restart. Use the number of physical cores (`lscpu`: cores x sockets), not logical CPUs; more threads than cores slows every call. Ollama defaults to the logical count. |
 | `OLLAMA_NUM_PARALLEL` | `2` in Compose | Parallel generations on the shared Ollama host; shown read-only in `/admin/`. |
 | `MINICPM_TOKENS_FILE` | `tokens.json` | Token storage; Docker uses `/data/tokens.json` in the `tokens` volume. Saved settings live beside it. |
 | `MINICPM_WEB_DIR` | repository `web/` | Admin static files; Docker uses `/app/web`. |

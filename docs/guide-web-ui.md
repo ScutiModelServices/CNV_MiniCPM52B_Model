@@ -94,7 +94,7 @@ When you create a token you can list the projects it may use (comma separated; e
 - **Expires in (days)** (optional, only when creating): after that the token is refused like a revoked one, and the row shows "Expired". Create a new token to continue.
 - **Edit** changes the allowed projects and the rate limit without revoking the token.
 - **Usage:** each row shows errors (answers with status 500 or above) and the average time per call. The counters are written at most once a minute.
-- **Metrics:** `GET /metrics` (send the admin password in `X-Internal-Token`) returns the same numbers as Prometheus text, one series per token. It reads the shared token file, so any replica answers with the same data.
+- **Metrics:** `GET /metrics` (send the admin password in `X-Internal-Token`) returns the same numbers as Prometheus text, one series per token. It reads the shared token file, so any replica answers with the same data. `minicpm_request_seconds` is a histogram of how long each `/v1` call took on the replica that answers (to the first byte for a streamed reply); it starts from 0 when the replica restarts.
 - **Project models** card: the models loaded for a single project on the replica that answered.
 
 ## Settings

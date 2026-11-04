@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Docs: set CPU threads to the number of physical cores, not logical CPUs.
+- `/metrics` also returns `minicpm_request_seconds`, a histogram of how long `/v1` calls took on that replica.
+- Compose: optional `OLLAMA_MEM_LIMIT` caps the Ollama container's RAM and `OLLAMA_KEEP_ALIVE` sets how long an idle model keeps its RAM (default no cap, 5m).
+
 - Answer cache (`MINICPM_CACHE_SIZE`, default 256, 0 = off; `X-Cache` header): the last answers to identical `temperature` 0 requests are sent again without asking Ollama.
 - `POST /v1/chat` accepts `"stream": true`: the answer arrives as JSON lines (`content`, `thinking`, then `done`).
 

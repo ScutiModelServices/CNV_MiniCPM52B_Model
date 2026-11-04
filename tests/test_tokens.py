@@ -137,3 +137,16 @@ def test_record_is_written_once_a_minute_and_exported(tmp_path, monkeypatch):
     assert (row["timed"], row["errors"], row["latency_ms"]) == (3, 1, 600)
     text = store.metrics("svc")
     assert 'svc_errors_total{token="proj \\"x\\""} 1' in text and "svc_latency_ms_sum" in text
+
+
+def test_latency_histogram_counts_cumulative_buckets():
+    from tokens import LatencyHistogram
+
+    histogram = LatencyHistogram()
+    for seconds in (0.05, 0.4, 3, 1000):
+        histogram.observe(seconds)
+    text = histogram.render("svc")
+    assert 'svc_request_seconds_bucket{le="0.1"} 1' in text and 'svc_request_seconds_bucket{le="0.5"} 2' in text
+    assert 'svc_request_seconds_bucket{le="5"} 3' in text and 'svc_request_seconds_bucket{le="300"} 3' in text
+    assert 'svc_request_seconds_bucket{le="+Inf"} 4' in text
+    assert "svc_request_seconds_count 4" in text and "svc_request_seconds_sum 1003.45" in text

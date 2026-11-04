@@ -21,6 +21,36 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+LATENCY_BUCKETS = (0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300)  # seconds
+
+
+class LatencyHistogram:
+    """How long calls took, kept in memory per replica as a Prometheus histogram (it restarts from 0 with the replica)."""
+
+    def __init__(self) -> None:
+        self._counts = [0] * len(LATENCY_BUCKETS)
+        self._total = 0
+        self._sum = 0.0
+
+    def observe(self, seconds: float) -> None:
+        self._total += 1
+        self._sum += seconds
+        for index, bound in enumerate(LATENCY_BUCKETS):
+            if seconds <= bound:
+                self._counts[index] += 1
+                break
+
+    def render(self, prefix: str) -> str:
+        name = f"{prefix}_request_seconds"
+        lines = [f"# TYPE {name} histogram"]
+        running = 0
+        for bound, count in zip(LATENCY_BUCKETS, self._counts):
+            running += count
+            lines.append(f'{name}_bucket{{le="{bound}"}} {running}')
+        lines += [f'{name}_bucket{{le="+Inf"}} {self._total}', f"{name}_sum {round(self._sum, 3)}", f"{name}_count {self._total}"]
+        return "\n".join(lines) + "\n"
+
+
 class TokenStore:
     def __init__(self, path: str | os.PathLike[str]) -> None:
         self._path = Path(path)
