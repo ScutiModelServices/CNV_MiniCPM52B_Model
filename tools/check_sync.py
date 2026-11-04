@@ -8,7 +8,7 @@ import re
 import sys
 from pathlib import Path
 
-SHARED = ("web/index.html", "src/tokens.py", "src/settings.py", "src/updates.py", ".dockerignore")
+SHARED = ("web/index.html", "web/playground.js", "src/tokens.py", "src/settings.py", "src/updates.py", ".dockerignore")
 OWN_COPY = {"src/updates.py": {"LayaModel"}}  # LayaModel keeps its own update flow (SERVICE-SPECIFIC.md)
 ALLOWED = re.compile(r"^(PREFIX = |const CONFIG = )")  # per-project: token prefix and page config
 
@@ -20,7 +20,7 @@ def lines(path: Path) -> list[str]:
 def main() -> int:
     here = Path(__file__).resolve().parent.parent
     drift = False
-    for sibling in ('LayaModel', 'MiniCPM52BModel', 'BitNet2BModel', 'TTSPiperModel', 'TTSParadeeModel', 'TEMImageModel', 'LFM3Model', 'S1MiniModel', 'SparkX26Model', 'TTSAudio8Model', 'SGLangModel'):
+    for sibling in ('LayaModel', 'MiniCPM52BModel', 'BitNet2BModel', 'TTSPiperModel', 'TTSParadeeModel', 'TEMImageModel', 'LFM3Model', 'S1MiniModel', 'STTWhisperModel', 'SparkX26Model', 'TTSAudio8Model', 'SGLangModel'):
         other = here.parent / sibling
         if sibling == here.name or not other.is_dir():
             continue

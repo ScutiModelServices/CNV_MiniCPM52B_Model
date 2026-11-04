@@ -3,6 +3,7 @@
 Needs `pip install playwright && playwright install chromium`; skipped when Playwright is missing.
 """
 import hashlib
+import json
 import socket
 import threading
 import time
@@ -37,6 +38,13 @@ def base_url():
         if request.url.path == "/api/tags":
             models = [{"name": "m:latest", "digest": digest}] if state["pulled"] else []
             return httpx.Response(200, json={"models": models})
+        if request.url.path == "/api/chat":
+            payload = {"model": "m", "message": {"role": "assistant", "content": "Playground hello"},
+                       "done": True, "done_reason": "stop", "prompt_eval_count": 3, "eval_count": 2}
+            if json.loads(request.content).get("stream"):
+                return httpx.Response(200, content=json.dumps(payload) + "\n",
+                                      headers={"content-type": "application/x-ndjson"})
+            return httpx.Response(200, json=payload)
         if request.url.path == "/api/pull":
             state["pulled"] = True
         return httpx.Response(200, json={"status": "success"})
@@ -51,7 +59,11 @@ def base_url():
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
+    deadline = time.monotonic() + 15
     while not server.started:
+        if not thread.is_alive() or time.monotonic() >= deadline:
+            server.should_exit = True
+            pytest.fail("Browser test server did not start within 15 seconds")
         time.sleep(0.05)
     yield f"http://127.0.0.1:{port}/admin/"
     server.should_exit = True
@@ -158,3 +170,35 @@ def test_settings_can_be_saved_and_reset(page):
     sync_api.expect(page.locator("#setting-max_inflight")).to_have_value("3")
     page.get_by_role("button", name="Reset Calls allowed to wait on Ollama").click()
     sync_api.expect(page.locator("#setting-max_inflight")).to_have_value("0")
+
+
+def _open_playground(page):
+    """Use separate admin and public credentials."""
+    page.fill("#admin", PASSWORD)
+    page.click("#signin-button")
+    sync_api.expect(page.locator("#playground")).to_be_visible()
+    made = page.request.post(page.url.rstrip("/") + "/tokens",
+                             headers={"X-Internal-Token": PASSWORD}, data={"name": "playground-browser"})
+    assert made.status == 200
+    token = made.json()["token"]
+    page.fill("#pg-token", token)
+    return token
+
+
+def _assert_playground_finished(page, token):
+    sync_api.expect(page.locator("#pg-status")).to_contain_text("HTTP 200", timeout=15000)
+    sync_api.expect(page.locator("#pg-send")).to_be_enabled(timeout=15000)
+    assert "<SERVICE_TOKEN>" in page.locator("#pg-curl").text_content()
+    assert token not in page.locator("#pg-curl").text_content()
+    assert PASSWORD not in page.locator("#pg-curl").text_content()
+    stored = page.evaluate("() => [...Object.values(localStorage), ...Object.values(sessionStorage)]")
+    assert not any(token in value for value in stored)
+
+
+def test_playground_uses_public_route_and_renders_answer(page):
+    """Exercise real public auth and the family fake engine."""
+    token = _open_playground(page)
+    page.fill("#pg-messages-0-content", "Say hello")
+    page.click("#pg-send")
+    _assert_playground_finished(page, token)
+    sync_api.expect(page.locator("#pg-output")).to_contain_text("Playground hello")
