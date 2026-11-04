@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `run.bat`: runs `uv sync` directly; `python -m uv` failed when uv was installed only as a program (winget).
 - Docker: `.dockerignore` keeps `.git`, `.venv`, tests and local state out of the build context (the same file in every model service).
 - Compose: `stop_grace_period: 90s`, so a restart lets a running answer finish instead of cutting it off after Docker's default 10 s.
 - Docs: set CPU threads to the number of physical cores, not logical CPUs.
