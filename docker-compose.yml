@@ -10,6 +10,7 @@ services:
     image: ollama/ollama:latest
     restart: unless-stopped
     mem_limit: ${OLLAMA_MEM_LIMIT:-0}  # 0 = no cap
+    stop_grace_period: 90s  # uvicorn lets running calls finish on SIGTERM; Docker's default 10 s would kill a long answer
     environment:
       OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-5m}  # how long an idle model keeps its RAM
       OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-2}
@@ -37,6 +38,7 @@ services:
   minicpm:
     build: .
     restart: unless-stopped
+    stop_grace_period: 90s  # uvicorn lets running calls finish on SIGTERM; Docker's default 10 s would kill a long answer
     environment:
       MINICPM_ADMIN_PASSWORD: ${MINICPM_ADMIN_PASSWORD:-}
       MINICPM_MODEL: ${MINICPM_MODEL:-hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M}
