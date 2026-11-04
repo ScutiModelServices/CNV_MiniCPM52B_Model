@@ -9,7 +9,9 @@ services:
   ollama:
     image: ollama/ollama:latest
     restart: unless-stopped
+    mem_limit: ${OLLAMA_MEM_LIMIT:-0}  # 0 = no cap
     environment:
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-5m}  # how long an idle model keeps its RAM
       OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-2}
       OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
     volumes:

@@ -29,7 +29,7 @@ from cache import AnswerCache
 from ollama import OllamaClient, OllamaError
 from options import DEFAULT_MODEL, SETTINGS
 import settings
-from tokens import TokenStore
+from tokens import LatencyHistogram, TokenStore
 from updates import Updates
 
 _log = logging.getLogger(__name__)
@@ -452,10 +452,14 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
             raise HTTPException(404, "No such token")
         return {"ok": True}
 
+    latency = LatencyHistogram()
+
     @app.middleware("http")
     async def measure(request: Request, call_next):
         started = time.perf_counter()
         response = await call_next(request)
+        if request.url.path.startswith("/v1/"):
+            latency.observe(time.perf_counter() - started)
         token_id = getattr(request.state, "token_id", None)
         if token_id:
             await run_in_threadpool(tokens.record, token_id, (time.perf_counter() - started) * 1000, response.status_code >= 500)
@@ -464,7 +468,7 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
     @app.get("/metrics", dependencies=[Depends(admin)])
     def metrics() -> PlainTextResponse:
         """Prometheus text per token, from the shared token file (up to a minute behind). Send the admin password."""
-        return PlainTextResponse(tokens.metrics("minicpm"))
+        return PlainTextResponse(tokens.metrics("minicpm") + latency.render("minicpm"))
 
     @app.delete("/admin/tokens/{token_id}", dependencies=[Depends(admin)])
     def revoke_token(token_id: str) -> dict[str, bool]:
