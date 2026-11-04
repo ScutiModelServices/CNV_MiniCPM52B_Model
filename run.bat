@@ -8,7 +8,7 @@ cd /d "%~dp0"
 
 python -m uv sync
 if errorlevel 1 (
-    echo uv sync failed. Install uv: python -m pip install uv
+    echo uv sync failed. Install uv: winget install astral-sh.uv
     pause
     exit /b 1
 )

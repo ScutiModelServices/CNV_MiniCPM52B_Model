@@ -17,7 +17,7 @@ ollama list
 (`:Q8_0` and `:F16` also exist; if you use one, set `MINICPM_MODEL` to the same tag.)
 
 ## 2. The service
-Windows: double-click `run.bat` (runs `uv sync` to create or update `.venv`, then starts the service). Needs uv: `python -m pip install uv`.
+Windows: double-click `run.bat` (runs `uv sync` to create or update `.venv`, then starts the service). Needs uv: `winget install astral-sh.uv`.
 
 Linux / macOS:
 ```bash
