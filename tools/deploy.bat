@@ -8,7 +8,7 @@ rem Override the target: set DEPLOY_HOST / DEPLOY_DIR / DEPLOY_WEB_PORT before r
 rem tools\deploy.local.bat (copy tools\deploy.local.example.bat) so the address stays out of the repository.
 setlocal enabledelayedexpansion
 if exist "%~dp0deploy.local.bat" call "%~dp0deploy.local.bat"
-if not defined DEPLOY_HOST set "DEPLOY_HOST=user@your-server.local"
+if not defined DEPLOY_HOST set "DEPLOY_HOST=lex@scutiserver1.local"
 if not defined DEPLOY_DIR set "DEPLOY_DIR=/media/ZimaOS-HD/Apps/MiniCPM52BModel"
 if not defined DEPLOY_WEB_PORT set "DEPLOY_WEB_PORT=7681"
 set "ROOT=%~dp0.."
