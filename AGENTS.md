@@ -7,7 +7,7 @@ This file is the one instruction file for every coding agent; `CLAUDE.md` only i
 
 ## Rules
 - Follow the `model-service-parity` skill and `AI/ModelServices/SHARED-FEATURES.md` (what must match in every model service) and `AI/ModelServices/SERVICE-SPECIFIC.md` (what differs on purpose). A change to a shared feature goes to every service; a new difference goes into `SERVICE-SPECIFIC.md` in the same change.
-- `web/index.html`, `src/tokens.py` and `src/settings.py`, `src/updates.py` are copies shared with the other model services. Change one, copy it to the others, run `python tools/check_sync.py` in each repo.
+- `web/index.html`, `src/tokens.py`, `src/settings.py`, `src/updates.py` and `.dockerignore` are copies shared with the other model services. Change one, copy it to the others, run `python tools/check_sync.py` in each repo.
 - The model runs in Ollama, not in this process: `src/ollama.py` is the client (its tests are `tests/test_engine.py`). Ollama has its own container and volume.
 - The only service with `tools`, `schema` and `thinking` on `POST /v1/chat`. Project models are Ollama models named with the `project_prefix` setting.
 - Behaviour changes update `README.md`, `deployment.md`, `docs/guide-web-ui.md`, `.env.example` and `CHANGELOG.md` in the same commit.
