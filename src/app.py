@@ -135,7 +135,9 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
         return value or 4 * int(os.environ.get("OLLAMA_NUM_PARALLEL") or 2)
 
     updates = updates or Updates(client.model, cached_sha=lambda: client.cached_sha(), remote_sha=lambda: client.remote_sha(),
-                                 download=lambda: client.pull(), unload=lambda: client.unload())
+                                 download=lambda: client.pull(), unload=lambda: client.unload(),
+                                 description="Looks for newer model weights on the remote registry without downloading.",
+                                 reload_note="Weights downloaded; Ollama unloaded the old copy. All replicas use the new weights on their next request.")
 
     async def check_forever() -> None:
         """Checks every `update_check_hours` (0 = off). The value is read again every second, so the admin page can change it."""
