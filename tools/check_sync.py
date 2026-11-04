@@ -20,7 +20,7 @@ def lines(path: Path) -> list[str]:
 def main() -> int:
     here = Path(__file__).resolve().parent.parent
     drift = False
-    for sibling in ('LayaModel', 'MiniCPM52BModel', 'BitNet2BModel', 'TTSPiperModel', 'TTSParadeeModel', 'TEMImageModel', 'LFM3Model', 'SparkX26Model', 'Audio8TTSModel', 'SGLangModel'):
+    for sibling in ('LayaModel', 'MiniCPM52BModel', 'BitNet2BModel', 'TTSPiperModel', 'TTSParadeeModel', 'TEMImageModel', 'LFM3Model', 'S1MiniModel', 'SparkX26Model', 'Audio8TTSModel', 'SGLangModel'):
         other = here.parent / sibling
         if sibling == here.name or not other.is_dir():
             continue
