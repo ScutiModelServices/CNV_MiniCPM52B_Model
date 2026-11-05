@@ -1,4 +1,6 @@
 # MiniCPM service: N API replicas behind one nginx address, all using one Ollama that holds the model.
+# Default: the Ollama already running on the host (OLLAMA_URL, http://host.docker.internal:11434). To run an Ollama
+# inside this stack instead, set COMPOSE_PROFILES=bundled-ollama and OLLAMA_URL=http://ollama:11434 in .env.
 # Start:  docker compose up -d --build          (callers use http://<host>:9130)
 # Scale:  MINICPM_REPLICAS=3 docker compose up -d --build, then: docker compose restart minicpm_lb
 # Ollama queues and parallelises requests itself (OLLAMA_NUM_PARALLEL), so one copy of the model serves every replica.
@@ -7,6 +9,7 @@ name: minicpm
 
 services:
   ollama:
+    profiles: [bundled-ollama]
     image: ollama/ollama:latest
     restart: unless-stopped
     mem_limit: ${OLLAMA_MEM_LIMIT:-0}  # 0 = no cap
@@ -26,6 +29,7 @@ services:
 
   # One-shot: downloads the model into the ollama volume, then exits.
   minicpm_pull:
+    profiles: [bundled-ollama]
     image: ollama/ollama:latest
     environment:
       OLLAMA_HOST: http://ollama:11434
@@ -42,17 +46,19 @@ services:
     environment:
       MINICPM_ADMIN_PASSWORD: ${MINICPM_ADMIN_PASSWORD:-}
       MINICPM_MODEL: ${MINICPM_MODEL:-hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M}
-      OLLAMA_URL: http://ollama:11434
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
       MINICPM_NUM_THREAD: ${MINICPM_NUM_THREAD:-4}
       MINICPM_REPLICAS: ${MINICPM_REPLICAS:-1}  # shown read-only on /admin/
       OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-2}  # same value Ollama runs with; shown read-only on /admin/
     volumes:
       - tokens:/data
+    extra_hosts: ["host.docker.internal:host-gateway"]  # reaches an Ollama running on the host
     deploy:
       replicas: ${MINICPM_REPLICAS:-1}
     depends_on:
       minicpm_pull:
         condition: service_completed_successfully
+        required: false  # only exists with the bundled-ollama profile
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9130/health')"]
       interval: 15s

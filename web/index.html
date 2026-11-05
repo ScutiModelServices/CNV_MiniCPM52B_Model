@@ -199,6 +199,7 @@ dialog p { overflow-wrap: anywhere; }
       <div class="tile"><p class="tile-label">CPU threads</p><p id="thread-value" class="tile-value">—</p></div>
       <div class="tile"><p class="tile-label">Active tokens</p><p id="token-count" class="tile-value">—</p></div>
     </div>
+    <section id="playground" class="card"></section>
     <p id="page-error" class="error" role="alert"></p>
     <section class="card" aria-labelledby="tokens-title">
       <div class="section-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 10 7-7m-3 3 3 3m-6 0 3 3M15 14a6 6 0 1 1-5-5 6 6 0 0 1 5 5Z"/><path d="M7 16h.01"/></svg><h2 id="tokens-title">Project tokens</h2></div>
@@ -286,14 +287,16 @@ dialog p { overflow-wrap: anywhere; }
   <p id="revoke-error" class="error" role="alert"></p>
   <div class="dialog-actions"><button id="cancel-revoke" type="button" autofocus>Cancel</button><button id="confirm-revoke" class="danger" type="button">Revoke token</button></div>
 </dialog>
+<script src="playground.js"></script>
 <script>
 // Per-service configuration. The rest of this page is shared verbatim.
-const CONFIG = {title: "MiniCPM52BModel", address: location.origin, threadLabel: "Ollama CPU threads", threadField: "num_thread", adminEnv: "MINICPM_ADMIN_PASSWORD", replicasEnv: "MINICPM_REPLICAS", extraTile: {label: "Ollama parallel requests", field: "ollama_parallel"}, updates: true};
+const CONFIG = {title: "MiniCPM52BModel", address: location.origin, threadLabel: "Ollama CPU threads", threadField: "num_thread", adminEnv: "MINICPM_ADMIN_PASSWORD", replicasEnv: "MINICPM_REPLICAS", extraTile: {label: "Ollama parallel requests", field: "ollama_parallel"}, updates: true, playground: {"operations":[{"label":"Chat","route":"/v1/chat","method":"POST","fields":[{"key":"messages.0.role","label":"Role","type":"select","options":["user","system","assistant"],"default":"user"},{"key":"messages.0.content","label":"Message","type":"textarea","required":true,"maxLength":100000,"default":"Hello!"},{"key":"project","label":"Project (optional)","type":"text"},{"key":"temperature","label":"Temperature","type":"number","min":0,"max":2,"step":0.1,"default":0},{"key":"max_tokens","label":"Maximum tokens","type":"number","min":1,"max":4096,"step":1,"default":512},{"key":"stream","label":"Stream response","type":"checkbox","default":true},{"key":"thinking","label":"Thinking","type":"checkbox","default":true},{"key":"tools","label":"Tools (optional)","type":"json"},{"key":"schema","label":"JSON schema (optional)","type":"json"}],"response":"stream","encoding":"json"}]}};
 
 const $ = id => document.getElementById(id);
 const storageKey = CONFIG.title + ":admin";
 let admin = "", session = new AbortController(), poll, polling = false, initializedThreads = false;
 let tokenRows = [], pendingRevoke = null, pendingEdit = null, settingRows = [], settingsTimer, savedTimer, copyTimer, tokenVersion = 0;
+const playground = Playground.mount($("playground"), CONFIG.playground, {secrets: () => [admin]});
 let theme = "system";
 try { theme = localStorage.getItem("admin-theme") || "system"; } catch {}
 if (!["system", "light", "dark"].includes(theme)) theme = "system";
@@ -330,6 +333,7 @@ function forgetToken() {
   clearTimeout(copyTimer);
 }
 function signOut(focus = true) {
+  playground.reset();
   session.abort();
   session = new AbortController();
   clearInterval(poll);

@@ -74,7 +74,7 @@ run.bat
 ```
 
 Docker, with a load balancer: `docker compose up -d --build`. `minicpm` runs `MINICPM_REPLICAS` API copies (default 1)
-behind nginx (`minicpm_lb`, `least_conn`, one retry), all using one `ollama` container that holds the model;
+behind nginx (`minicpm_lb`, `least_conn`, one retry), all using one Ollama that holds the model: by default the Ollama already running on the host (`OLLAMA_URL=http://host.docker.internal:11434`; pull the model there once, and it must listen on `0.0.0.0`), or with `COMPOSE_PROFILES=bundled-ollama` an `ollama` container in the stack, where
 `minicpm_pull` downloads it on first start. Ollama runs `OLLAMA_NUM_PARALLEL` requests at once (default 2). `MINICPM_NUM_THREAD` caps the CPU threads Ollama uses per request (`/health` reports it; `/admin/` can change and save it; other replicas apply it on restart). After
 changing the replica count, run `docker compose restart minicpm_lb`.
 
@@ -108,3 +108,10 @@ The service code is MIT. It does not ship model weights: Ollama downloads MiniCP
 A plain publish (`tools\deploy.bat` option 1) only updates the `live` branch, so it is fine for test deploys. A release is a separate step: set `VERSION` (and `pyproject.toml` where it has a version, to the same number), commit, then run `tools\deploy.bat` option R or `py tools\publish_live.py --release`. That publishes to `live` and tags the `main` commit `vX.Y.Z` and the live commit `live-vX.Y.Z`. A version already released with different live files is refused, so bump `VERSION`. While a version is not officially released yet, add `--replace` to move its tags.
 
 `tools\make_zip.bat` then builds `zip_versions\MiniCPM52BModel-<VERSION>.zip` (no `tools/`, no git-ignored files, no older ZIPs; `.env.example` is included) and opens GitHub's new-release page for the tag.
+
+
+## Try it from the admin page
+
+Open `/admin/` and use **Try it** to call the public API with a service token held only in memory. Runs use normal token scopes, limits and caches; the panel shows HTTP status, latency, responses, cancellation and a curl equivalent with a token placeholder. See [the web UI guide](docs/guide-web-ui.md#try-it-send-a-real-request).
+
+Chat sends messages to `POST /v1/chat`, with optional project and generation controls. Streaming appends NDJSON events as they arrive. MiniCPM also accepts thinking, tools or a JSON schema; tools and schema are mutually exclusive.
