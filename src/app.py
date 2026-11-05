@@ -32,6 +32,11 @@ import settings
 from tokens import LatencyHistogram, TokenStore
 from updates import Updates
 
+# Names before the rename (OLLAMA_URL, MINICPM_MODEL) still work.
+for _new, _old in (("MINICPM_OLLAMA_URL", "OLLAMA_URL"), ("MINICPM_OLLAMA_MODEL", "MINICPM_MODEL")):
+    if _old in os.environ:
+        os.environ.setdefault(_new, os.environ[_old])
+
 _log = logging.getLogger(__name__)
 
 PROJECT_PATTERN = r"^[a-z0-9][a-z0-9_-]{0,47}$"
@@ -114,8 +119,8 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
     many answers per replica (MINICPM_CACHE_SIZE). `config` (the admin page's settings) replaces `warm`, `check_hours`,
     `max_inflight` and `cache_size` and keeps them live; without it they stay fixed."""
     tokens = tokens or TokenStore(os.environ.get("MINICPM_TOKENS_FILE", "tokens.json"))
-    client = client or OllamaClient(os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"),
-                                    config.get("model") if config else os.environ.get("MINICPM_MODEL", DEFAULT_MODEL))
+    client = client or OllamaClient(os.environ.get("MINICPM_OLLAMA_URL", "http://127.0.0.1:11434"),
+                                    config.get("model") if config else os.environ.get("MINICPM_OLLAMA_MODEL", DEFAULT_MODEL))
 
     def prefix() -> str:
         return config.get("project_prefix") if config else os.environ.get("MINICPM_PROJECT_PREFIX", "minicpm-")
@@ -490,7 +495,7 @@ def main() -> None:
 
     store = TokenStore(os.environ.get("MINICPM_TOKENS_FILE", "tokens.json"))
     config = settings.Config(store.settings_path, SETTINGS)
-    client = OllamaClient(os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"), config.get("model"))
+    client = OllamaClient(os.environ.get("MINICPM_OLLAMA_URL", "http://127.0.0.1:11434"), config.get("model"))
     saved = settings.load(store.settings_path)
     threads = saved.get("num_thread") or os.environ.get("MINICPM_NUM_THREAD", "").strip()
     if threads:

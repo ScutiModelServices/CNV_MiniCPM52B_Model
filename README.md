@@ -33,7 +33,7 @@ together.
 
 **Project models.** Optional `"project": "my-project"` selects `minicpm-my-project` when installed in Ollama,
 including its `:latest` alias. Project names must match `^[a-z0-9][a-z0-9_-]{0,47}$`; invalid names return 422.
-An absent or null project uses `MINICPM_MODEL`. An unavailable project also uses that base model and returns
+An absent or null project uses `MINICPM_OLLAMA_MODEL`. An unavailable project also uses that base model and returns
 `"fallback": true`; all other successful replies return false. `model` reports the model actually selected.
 Inventory is cached for 30 seconds per API replica. A project that is not in the cache re-asks Ollama (at most every
 2 seconds), so a model just made with `ollama create` is found at once; `/health` always asks Ollama. If Ollama cannot
@@ -74,7 +74,7 @@ run.bat
 ```
 
 Docker, with a load balancer: `docker compose up -d --build`. `minicpm` runs `MINICPM_REPLICAS` API copies (default 1)
-behind nginx (`minicpm_lb`, `least_conn`, one retry), all using one Ollama that holds the model: by default the Ollama already running on the host (`OLLAMA_URL=http://host.docker.internal:11434`; pull the model there once, and it must listen on `0.0.0.0`), or with `COMPOSE_PROFILES=bundled-ollama` an `ollama` container in the stack, where
+behind nginx (`minicpm_lb`, `least_conn`, one retry), all using one Ollama that holds the model: by default the Ollama already running on the host (`MINICPM_OLLAMA_URL=http://host.docker.internal:11434`; pull the model there once, and it must listen on `0.0.0.0`), or with `COMPOSE_PROFILES=bundled-ollama` an `ollama` container in the stack, where
 `minicpm_pull` downloads it on first start. Ollama runs `OLLAMA_NUM_PARALLEL` requests at once (default 2). `MINICPM_NUM_THREAD` caps the CPU threads Ollama uses per request (`/health` reports it; `/admin/` can change and save it; other replicas apply it on restart). After
 changing the replica count, run `docker compose restart minicpm_lb`.
 
@@ -89,8 +89,8 @@ changing the replica count, run `docker compose restart minicpm_lb`.
 
 ## Settings
 
-`MINICPM_HOST` (127.0.0.1), `MINICPM_PORT` (9130), `MINICPM_ADMIN_PASSWORD` (unlocks `/admin/`; empty = no auth), `MINICPM_MODEL`
-(`hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`; `:Q8_0` and `:F16` also exist), `OLLAMA_URL` (http://127.0.0.1:11434).
+`MINICPM_HOST` (127.0.0.1), `MINICPM_PORT` (9130), `MINICPM_ADMIN_PASSWORD` (unlocks `/admin/`; empty = no auth), `MINICPM_OLLAMA_MODEL`
+(`hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`; `:Q8_0` and `:F16` also exist), `MINICPM_OLLAMA_URL` (http://127.0.0.1:11434).
 `MINICPM_PROJECT_PREFIX` defaults to `minicpm-` and prefixes project model names.
 
 ## Test

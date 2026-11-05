@@ -21,10 +21,10 @@ MiniCPM52BModel serves MiniCPM5-2B over HTTP on port 9130. FastAPI replicas (`mi
 | `MINICPM_PORT` | `9130` | Published nginx port; containers always listen on 9130. Also the local service port. |
 | `MINICPM_HOST` | `127.0.0.1` | Local bind address; the Dockerfile sets `0.0.0.0`. |
 | `MINICPM_ADMIN_PASSWORD` | empty | Unlocks `/admin/` and enables project-token auth. Empty means no auth; use only locally. |
-| `MINICPM_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Model pulled and served by Ollama. |
+| `MINICPM_OLLAMA_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Model pulled and served by Ollama. |
 | `MINICPM_PROJECT_PREFIX` | `minicpm-` | Prefix for installed project models selected by optional chat `project`. Works when unset. |
 | `OLLAMA_MAX_LOADED_MODELS` | `1` in Compose | Maximum resident models on Ollama; more models need more RAM. For local runs set this on the Ollama process. |
-| `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama endpoint. Compose defaults to `http://host.docker.internal:11434` (the Ollama on the host; pull the model there once). With `COMPOSE_PROFILES=bundled-ollama` set it to `http://ollama:11434` to use the Ollama container in this stack. |
+| `MINICPM_OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama endpoint. Compose defaults to `http://host.docker.internal:11434` (the Ollama on the host; pull the model there once). With `COMPOSE_PROFILES=bundled-ollama` set it to `http://ollama:11434` to use the Ollama container in this stack. |
 | `MINICPM_UPDATE_CHECK_HOURS` | `6` | Check remote model manifests at startup and every N hours; `0` disables automatic checks. Manual checks remain available. |
 | `MINICPM_MAX_INFLIGHT` | 4 x `OLLAMA_NUM_PARALLEL` | Calls one replica lets wait on Ollama at once. More get `429` with `Retry-After: 5` instead of timing out. An Ollama `503` (its own queue is full) also becomes `429`. |
 | `MINICPM_WARM` | `1` | Load the model at startup with an empty chat and a 30-minute keep-alive. `0` leaves loading to the first request. Failure is logged and does not stop the API. |
@@ -170,7 +170,7 @@ There is no MiniCPM offline flag: set update hours to `0` to stop automatic netw
 |---|---|
 | `minicpm_lb` never starts | API health checks have not passed; inspect `docker compose logs minicpm`. |
 | `minicpm` never starts | Initial pull has not completed; inspect `docker compose logs minicpm_pull`. |
-| `/health` has `ready: false` | Ollama is unreachable or the configured model is missing. Check `OLLAMA_URL`, `MINICPM_MODEL` and `ollama list`. |
+| `/health` has `ready: false` | Ollama is unreachable or the configured model is missing. Check `MINICPM_OLLAMA_URL`, `MINICPM_OLLAMA_MODEL` and `ollama list`. |
 | 401 from chat | Missing or revoked project token. Make one in `/admin/`. |
 | 422 from chat | Invalid input or Ollama rejected options; inspect the response detail. |
 | 504 from chat | Ollama generation exceeded the API timeout. Reduce token budget, concurrency or context size. |
@@ -192,7 +192,7 @@ The archive excludes development tools, ignored files and old ZIPs; its example 
 
 ## Settings on the admin page
 
-These are edited on the **Settings** card of `/admin/` and saved in `settings.json` beside the tokens, so all replicas share them: `MINICPM_UPDATE_CHECK_HOURS`, `MINICPM_MAX_INFLIGHT`, `MINICPM_CACHE_SIZE`, `MINICPM_PROJECT_PREFIX`, `MINICPM_MODEL` and `MINICPM_WARM` (the last two are read at start). A saved value beats the environment variable. The compose file no longer passes them, except `MINICPM_MODEL`, which the one-time `minicpm_pull` container also uses. After you change the base model and restart, pull it from the Updates card. Still in `.env`: `MINICPM_ADMIN_PASSWORD`, `MINICPM_PORT`, `MINICPM_REPLICAS`, `MINICPM_NUM_THREAD` (a starting value for the CPU threads card) and `OLLAMA_NUM_PARALLEL`.
+These are edited on the **Settings** card of `/admin/` and saved in `settings.json` beside the tokens, so all replicas share them: `MINICPM_UPDATE_CHECK_HOURS`, `MINICPM_MAX_INFLIGHT`, `MINICPM_CACHE_SIZE`, `MINICPM_PROJECT_PREFIX`, `MINICPM_OLLAMA_MODEL` and `MINICPM_WARM` (the last two are read at start). A saved value beats the environment variable. The compose file no longer passes them, except `MINICPM_OLLAMA_MODEL`, which the one-time `minicpm_pull` container also uses. After you change the base model and restart, pull it from the Updates card. Still in `.env`: `MINICPM_ADMIN_PASSWORD`, `MINICPM_PORT`, `MINICPM_REPLICAS`, `MINICPM_NUM_THREAD` (a starting value for the CPU threads card) and `OLLAMA_NUM_PARALLEL`.
 
 
 ## Verify with Try it

@@ -15,7 +15,7 @@ nginx.
    ```
    Set `MINICPM_ADMIN_PASSWORD` (empty = no auth, local-only). Defaults are fine for the rest:
    `MINICPM_PORT=9130`, `MINICPM_REPLICAS=1`, `OLLAMA_NUM_PARALLEL=2`. Set `MINICPM_NUM_THREAD` to your real core
-   count (compose default 4). For another quantisation set `MINICPM_MODEL=hf.co/openbmb/MiniCPM5-2B-GGUF:Q8_0`.
+   count (compose default 4). For another quantisation set `MINICPM_OLLAMA_MODEL=hf.co/openbmb/MiniCPM5-2B-GGUF:Q8_0`.
 2. Start:
    ```bash
    docker compose up -d --build

@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- Compose uses the Ollama already running on the host by default (`OLLAMA_URL`, `http://host.docker.internal:11434`), shared with other services. The bundled `ollama` and `minicpm_pull` services are now behind the `bundled-ollama` profile (`COMPOSE_PROFILES=bundled-ollama`, `OLLAMA_URL=http://ollama:11434`).
+- Compose uses the Ollama already running on the host by default (`MINICPM_OLLAMA_URL`, `http://host.docker.internal:11434`), shared with other services. The bundled `ollama` and `minicpm_pull` services are now behind the `bundled-ollama` profile (`COMPOSE_PROFILES=bundled-ollama`, `MINICPM_OLLAMA_URL=http://ollama:11434`).
+- Variable names now match LFM3Model and SparkX26Model: `MINICPM_OLLAMA_URL` (was `OLLAMA_URL`) and `MINICPM_OLLAMA_MODEL` (was `MINICPM_MODEL`). The old names still work. Ollama's own variables (`OLLAMA_NUM_PARALLEL`, `OLLAMA_KEEP_ALIVE`, `OLLAMA_MEM_LIMIT`) keep their names.
 
 - Admin **Try it** panel: descriptor-driven public API requests, live text streams, JSON/media output, status and latency, cancellation and redacted curl. Auth choice (b): pasted public token stays in memory; normal scope, limits and caches apply. Shared `web/playground.js` is copied across all model and tool services.
 

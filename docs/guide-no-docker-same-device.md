@@ -14,7 +14,7 @@ Make sure Ollama is running (the Windows/macOS app starts it; on Linux run `olla
 ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M
 ollama list
 ```
-(`:Q8_0` and `:F16` also exist; if you use one, set `MINICPM_MODEL` to the same tag.)
+(`:Q8_0` and `:F16` also exist; if you use one, set `MINICPM_OLLAMA_MODEL` to the same tag.)
 
 ## 2. The service
 Windows: double-click `run.bat` (runs `uv sync` to create or update `.venv`, then starts the service). Needs uv: `winget install astral-sh.uv`.
@@ -34,9 +34,9 @@ The service reads the real environment, **not** `.env`. Set before starting:
 | `MINICPM_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` only if other devices need it). |
 | `MINICPM_PORT` | `9130` | Port. |
 | `MINICPM_ADMIN_PASSWORD` | empty | Unlocks `/admin/` and requires tokens on all calls except `/health`. Empty = no auth. |
-| `MINICPM_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Must match the tag you pulled. |
+| `MINICPM_OLLAMA_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Must match the tag you pulled. |
 | `MINICPM_PROJECT_PREFIX` | `minicpm-` | Prefix for project models; selection works when unset. |
-| `OLLAMA_URL` | `http://127.0.0.1:11434` | Where Ollama is. |
+| `MINICPM_OLLAMA_URL` | `http://127.0.0.1:11434` | Where Ollama is. |
 | `MINICPM_NUM_THREAD` | Ollama decides | CPU threads per request. |
 
 PowerShell: `$env:MINICPM_ADMIN_PASSWORD = "secret"; .\run.bat`
@@ -79,7 +79,7 @@ together: both use port 9130.
 ## Problems
 | Symptom | Fix |
 |---|---|
-| `ready: false` | Ollama not running, or the model tag differs from `MINICPM_MODEL`. Check `ollama list`. |
+| `ready: false` | Ollama not running, or the model tag differs from `MINICPM_OLLAMA_MODEL`. Check `ollama list`. |
 | 502 on calls | Ollama down or model missing. |
 | 504 | Ollama timed out; set `MINICPM_NUM_THREAD` to real cores. |
 | Docker callers cannot reach it | Start with `MINICPM_HOST=0.0.0.0` and use `http://host.docker.internal:9130`. |
