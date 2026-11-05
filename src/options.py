@@ -13,7 +13,7 @@ SETTINGS = [
             help="The last answers for the same request, sent again without asking Ollama. Only temperature 0 requests are kept. 0 = off"),
     Setting("project_prefix", "Project model prefix", "text", "minicpm-", "MINICPM_PROJECT_PREFIX",
             help="A project uses the Ollama model named prefix + project"),
-    Setting("model", "Base model", "text", DEFAULT_MODEL, "MINICPM_MODEL", restart=True, blank=False,
+    Setting("model", "Base model", "text", DEFAULT_MODEL, "MINICPM_OLLAMA_MODEL", restart=True, blank=False,
             help="After a restart, pull a new one from the Updates card"),
     Setting("warm", "Load the model at start", "bool", True, "MINICPM_WARM", restart=True),
 ]
