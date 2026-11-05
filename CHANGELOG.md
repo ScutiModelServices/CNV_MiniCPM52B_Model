@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Compose uses the Ollama already running on the host by default (`OLLAMA_URL`, `http://host.docker.internal:11434`), shared with other services. The bundled `ollama` and `minicpm_pull` services are now behind the `bundled-ollama` profile (`COMPOSE_PROFILES=bundled-ollama`, `OLLAMA_URL=http://ollama:11434`).
+
 - Admin **Try it** panel: descriptor-driven public API requests, live text streams, JSON/media output, status and latency, cancellation and redacted curl. Auth choice (b): pasted public token stays in memory; normal scope, limits and caches apply. Shared `web/playground.js` is copied across all model and tool services.
 
 - `run.bat`: runs `uv sync` directly; `python -m uv` failed when uv was installed only as a program (winget).

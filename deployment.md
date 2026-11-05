@@ -24,7 +24,7 @@ MiniCPM52BModel serves MiniCPM5-2B over HTTP on port 9130. FastAPI replicas (`mi
 | `MINICPM_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Model pulled and served by Ollama. |
 | `MINICPM_PROJECT_PREFIX` | `minicpm-` | Prefix for installed project models selected by optional chat `project`. Works when unset. |
 | `OLLAMA_MAX_LOADED_MODELS` | `1` in Compose | Maximum resident models on Ollama; more models need more RAM. For local runs set this on the Ollama process. |
-| `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama endpoint; Compose sets `http://ollama:11434`. |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama endpoint. Compose defaults to `http://host.docker.internal:11434` (the Ollama on the host; pull the model there once). With `COMPOSE_PROFILES=bundled-ollama` set it to `http://ollama:11434` to use the Ollama container in this stack. |
 | `MINICPM_UPDATE_CHECK_HOURS` | `6` | Check remote model manifests at startup and every N hours; `0` disables automatic checks. Manual checks remain available. |
 | `MINICPM_MAX_INFLIGHT` | 4 x `OLLAMA_NUM_PARALLEL` | Calls one replica lets wait on Ollama at once. More get `429` with `Retry-After: 5` instead of timing out. An Ollama `503` (its own queue is full) also becomes `429`. |
 | `MINICPM_WARM` | `1` | Load the model at startup with an empty chat and a 30-minute keep-alive. `0` leaves loading to the first request. Failure is logged and does not stop the API. |

@@ -74,7 +74,7 @@ run.bat
 ```
 
 Docker, with a load balancer: `docker compose up -d --build`. `minicpm` runs `MINICPM_REPLICAS` API copies (default 1)
-behind nginx (`minicpm_lb`, `least_conn`, one retry), all using one `ollama` container that holds the model;
+behind nginx (`minicpm_lb`, `least_conn`, one retry), all using one Ollama that holds the model: by default the Ollama already running on the host (`OLLAMA_URL=http://host.docker.internal:11434`; pull the model there once, and it must listen on `0.0.0.0`), or with `COMPOSE_PROFILES=bundled-ollama` an `ollama` container in the stack, where
 `minicpm_pull` downloads it on first start. Ollama runs `OLLAMA_NUM_PARALLEL` requests at once (default 2). `MINICPM_NUM_THREAD` caps the CPU threads Ollama uses per request (`/health` reports it; `/admin/` can change and save it; other replicas apply it on restart). After
 changing the replica count, run `docker compose restart minicpm_lb`.
 
