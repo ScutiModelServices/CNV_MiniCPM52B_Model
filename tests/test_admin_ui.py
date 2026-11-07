@@ -202,3 +202,15 @@ def test_playground_uses_public_route_and_renders_answer(page):
     page.click("#pg-send")
     _assert_playground_finished(page, token)
     sync_api.expect(page.locator("#pg-output")).to_contain_text("Playground hello")
+
+
+def test_connect_card_lists_the_addresses_other_services_can_use(page):
+    page.fill("#admin", PASSWORD)
+    page.click("#signin-button")
+    sync_api.expect(page.locator("#dashboard")).to_be_visible()
+    card = page.locator("#connect-card")
+    sync_api.expect(card).to_contain_text("The address you opened this page with")
+    sync_api.expect(card).to_contain_text("host.docker.internal")
+    sync_api.expect(card).to_contain_text("/health")
+    port = page.url.split(":")[2].split("/")[0]
+    sync_api.expect(card).to_contain_text("http://127.0.0.1:" + port)

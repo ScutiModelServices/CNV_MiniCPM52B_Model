@@ -1,12 +1,32 @@
-.venv_minicpm/
+# Python
 .venv/
+.venv_*/
+.uv-cache/
+.uv_cache/
 __pycache__/
+*.pyc
 *.egg-info/
 .pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# Runtime data, secrets and local settings
+.data/
+.output/
 .env
-zip_versions/
-zip_versions/
+.env.*
+!.env.example
+secrets/
+.secrets/
 tokens.json
 tokens.json.lock
 settings.json
+.python-version
+
+# Release and deploy output
+zip_versions/
 tools/deploy.local.bat
+
+# Fetched at build time (TEMImageModel)
+tem_code/

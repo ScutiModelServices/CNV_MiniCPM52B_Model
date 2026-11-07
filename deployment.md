@@ -37,7 +37,7 @@ Set Compose variables in the shell or a local `.env` beside `docker-compose.yml`
 without setting an admin password. Create a separate project token for each caller in `/admin/` and send it
 as `X-Internal-Token`. The admin password is only for admin routes.
 
-## Standalone
+## Start (standalone)
 
 ```bash
 docker compose up -d --build
@@ -179,7 +179,7 @@ There is no MiniCPM offline flag: set update hours to `0` to stop automatic netw
 | nginx 502 after scaling | Restart `minicpm_lb` to refresh replica addresses. |
 | Port 9130 already in use | Another local or Compose instance is running. Stop one or change the published port. |
 
-### Releasing
+## Releasing
 
 A plain publish (`tools\deploy.bat` option 1) updates only the `live` branch. For a release, set `VERSION` and
 the version in `pyproject.toml` to the same number, commit, then run `tools\deploy.bat` option R or

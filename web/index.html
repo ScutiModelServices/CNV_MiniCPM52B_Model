@@ -161,6 +161,11 @@ dialog p { overflow-wrap: anywhere; }
   td button { min-height: 44px; }
   .thread-controls { gap: 8px; }
 }
+.connect { display: grid; gap: 8px; margin-top: 12px; }
+.connect-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); }
+.connect-row p { margin: 0; }
+.connect-row .mono { font-size: .92em; }
+.connect-group { margin: 14px 0 0; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -200,6 +205,12 @@ dialog p { overflow-wrap: anywhere; }
       <div class="tile"><p class="tile-label">Active tokens</p><p id="token-count" class="tile-value">—</p></div>
     </div>
     <section id="playground" class="card"></section>
+    <section id="connect-card" class="card" aria-labelledby="connect-title">
+      <div class="section-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><h2 id="connect-title">Connect to this service</h2></div>
+      <p class="description">Addresses other services can use. Pick the row that matches where the caller runs. Every call except <span class="mono">/health</span> needs a token in <span class="mono">X-Internal-Token</span>; make one under the tokens card.</p>
+      <div id="connect-list" class="connect"></div>
+      <p id="connect-status" class="sr-only" role="status"></p>
+    </section>
     <p id="page-error" class="error" role="alert"></p>
     <section class="card" aria-labelledby="tokens-title">
       <div class="section-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 10 7-7m-3 3 3 3m-6 0 3 3M15 14a6 6 0 1 1-5-5 6 6 0 0 1 5 5Z"/><path d="M7 16h.01"/></svg><h2 id="tokens-title">Project tokens</h2></div>
@@ -290,7 +301,7 @@ dialog p { overflow-wrap: anywhere; }
 <script src="playground.js"></script>
 <script>
 // Per-service configuration. The rest of this page is shared verbatim.
-const CONFIG = {title: "MiniCPM52BModel", address: location.origin, threadLabel: "Ollama CPU threads", threadField: "num_thread", adminEnv: "MINICPM_ADMIN_PASSWORD", replicasEnv: "MINICPM_REPLICAS", extraTile: {label: "Ollama parallel requests", field: "ollama_parallel"}, updates: true, playground: {"operations":[{"label":"Chat","route":"/v1/chat","method":"POST","fields":[{"key":"messages.0.role","label":"Role","type":"select","options":["user","system","assistant"],"default":"user"},{"key":"messages.0.content","label":"Message","type":"textarea","required":true,"maxLength":100000,"default":"Hello!"},{"key":"project","label":"Project (optional)","type":"text"},{"key":"temperature","label":"Temperature","type":"number","min":0,"max":2,"step":0.1,"default":0},{"key":"max_tokens","label":"Maximum tokens","type":"number","min":1,"max":4096,"step":1,"default":512},{"key":"stream","label":"Stream response","type":"checkbox","default":true},{"key":"thinking","label":"Thinking","type":"checkbox","default":true},{"key":"tools","label":"Tools (optional)","type":"json"},{"key":"schema","label":"JSON schema (optional)","type":"json"}],"response":"stream","encoding":"json"}]}};
+const CONFIG = {connect: {host: "minicpm_lb", port: 9130}, title: "MiniCPM52BModel", address: location.origin, threadLabel: "Ollama CPU threads", threadField: "num_thread", adminEnv: "MINICPM_ADMIN_PASSWORD", replicasEnv: "MINICPM_REPLICAS", extraTile: {label: "Ollama parallel requests", field: "ollama_parallel"}, updates: true, playground: {"operations":[{"label":"Chat","route":"/v1/chat","method":"POST","fields":[{"key":"messages.0.role","label":"Role","type":"select","options":["user","system","assistant"],"default":"user"},{"key":"messages.0.content","label":"Message","type":"textarea","required":true,"maxLength":100000,"default":"Hello!"},{"key":"project","label":"Project (optional)","type":"text"},{"key":"temperature","label":"Temperature","type":"number","min":0,"max":2,"step":0.1,"default":0},{"key":"max_tokens","label":"Maximum tokens","type":"number","min":1,"max":4096,"step":1,"default":512},{"key":"stream","label":"Stream response","type":"checkbox","default":true},{"key":"thinking","label":"Thinking","type":"checkbox","default":true},{"key":"tools","label":"Tools (optional)","type":"json"},{"key":"schema","label":"JSON schema (optional)","type":"json"}],"response":"stream","encoding":"json"}]}};
 
 const $ = id => document.getElementById(id);
 const storageKey = CONFIG.title + ":admin";
@@ -309,6 +320,47 @@ document.title = CONFIG.title + " admin";
 $("signin-title").textContent = document.title;
 $("page-title").textContent = document.title;
 $("address").textContent = CONFIG.address;
+
+/* Connect card: the addresses other services can use. Built from the page's own address and CONFIG.connect. */
+function connectRow(label, url, note) {
+  const row = document.createElement("div"); row.className = "connect-row";
+  const text = document.createElement("div");
+  const name = document.createElement("p"); name.textContent = label;
+  const code = document.createElement("p"); code.className = "mono"; code.textContent = url;
+  text.append(name, code);
+  if (note) { const hint = document.createElement("p"); hint.className = "hint"; hint.textContent = note; text.append(hint); }
+  const button = document.createElement("button"); button.type = "button"; button.textContent = "Copy";
+  button.setAttribute("aria-label", "Copy " + url);
+  button.onclick = async () => {
+    let copied = false;
+    try { await navigator.clipboard.writeText(url); copied = true; } catch {}
+    button.textContent = copied ? "Copied" : "Copy failed";
+    $("connect-status").textContent = copied ? "Copied " + url : "Copy failed. Select the address and copy it manually.";
+    setTimeout(() => { button.textContent = "Copy"; }, 2000);
+  };
+  row.append(text, button);
+  return row;
+}
+function renderConnect() {
+  const list = $("connect-list"), c = CONFIG.connect || {};
+  const port = c.port || location.port, seen = new Set(), rows = [];
+  const add = (label, url, note) => { if (!seen.has(url)) { seen.add(url); rows.push(connectRow(label, url, note)); } };
+  const group = title => { const p = document.createElement("p"); p.className = "connect-group"; p.textContent = title; rows.push(p); };
+  group("Addresses");
+  add("The address you opened this page with", location.origin, "Use this from other machines when it is a LAN name or IP.");
+  const published = location.port || port;  // the host port may differ from the container port
+  add("The same PC", "http://127.0.0.1:" + published, "A program on this machine.");
+  if (c.host) add("Another Docker container", "http://" + c.host + ":" + port, "On the same Docker network: join the network named in the compose file.");
+  add("A Docker container calling this PC", "http://host.docker.internal:" + published, "Docker Desktop, or Linux with host-gateway.");
+  const operations = (CONFIG.playground && CONFIG.playground.operations) || [];
+  if (operations.length) {
+    group("Endpoints");
+    for (const op of operations) add(op.label + " (" + (op.method || "POST") + ")", location.origin + op.route);
+  }
+  add("Health (no token)", location.origin + "/health");
+  list.replaceChildren(...rows);
+}
+renderConnect();
 $("thread-label").textContent = CONFIG.threadLabel;
 $("model-label").textContent = CONFIG.extraTile ? "Model ready" : "Models loaded";
 if (CONFIG.extraTile) {

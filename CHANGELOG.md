@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Admin page: **Connect to this service** card with the addresses other services can use (this page's address, same PC, Docker network, `host.docker.internal`) and every endpoint, each with a Copy button.
 - Compose uses the Ollama already running on the host by default (`MINICPM_OLLAMA_URL`, `http://host.docker.internal:11434`), shared with other services. The bundled `ollama` and `minicpm_pull` services are now behind the `bundled-ollama` profile (`COMPOSE_PROFILES=bundled-ollama`, `MINICPM_OLLAMA_URL=http://ollama:11434`).
 - Variable names now match LFM3Model and SparkX26Model: `MINICPM_OLLAMA_URL` (was `OLLAMA_URL`) and `MINICPM_OLLAMA_MODEL` (was `MINICPM_MODEL`). The old names still work. Ollama's own variables (`OLLAMA_NUM_PARALLEL`, `OLLAMA_KEEP_ALIVE`, `OLLAMA_MEM_LIMIT`) keep their names.
 
