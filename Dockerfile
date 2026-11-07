@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /usr/local/bin/uv
-ENV MINICPM_WEB_DIR=/app/web MINICPM_TOKENS_FILE=/data/tokens.json PYTHONUNBUFFERED=1 UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/opt/venv PATH="/opt/venv/bin:$PATH" MINICPM_HOST=0.0.0.0
+ENV SERVICE_WEB_DIR=/app/web SERVICE_TOKENS_FILE=/data/tokens.json PYTHONUNBUFFERED=1 UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/opt/venv PATH="/opt/venv/bin:$PATH" SERVICE_HOST=0.0.0.0
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
@@ -9,6 +9,6 @@ RUN uv sync --frozen --no-dev
 COPY src ./src
 COPY web ./web
 
-ENV MINICPM_PORT=29200
+ENV SERVICE_PORT=29200
 EXPOSE 29200
 CMD ["python", "src/app.py"]

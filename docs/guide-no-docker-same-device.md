@@ -14,7 +14,7 @@ Make sure Ollama is running (the Windows/macOS app starts it; on Linux run `olla
 ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M
 ollama list
 ```
-(`:Q8_0` and `:F16` also exist; if you use one, set `MINICPM_OLLAMA_MODEL` to the same tag.)
+(`:Q8_0` and `:F16` also exist; if you use one, set `SERVICE_OLLAMA_MODEL` to the same tag.)
 
 ## 2. The service
 Windows: double-click `run.bat` (runs `uv sync` to create or update `.venv`, then starts the service). Needs uv: `winget install astral-sh.uv`.
@@ -31,16 +31,16 @@ uv run python src/app.py
 
 | Variable | Default | Effect |
 |---|---|---|
-| `MINICPM_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` only if other devices need it). |
-| `MINICPM_PORT` | `29200` | Port. |
-| `MINICPM_ADMIN_PASSWORD` | empty | Unlocks `/admin/` and requires tokens on all calls except `/health`. Empty = no auth. |
-| `MINICPM_OLLAMA_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Must match the tag you pulled. |
-| `MINICPM_PROJECT_PREFIX` | `minicpm-` | Prefix for project models; selection works when unset. |
-| `MINICPM_OLLAMA_URL` | `http://127.0.0.1:11434` | Where Ollama is. |
-| `MINICPM_NUM_THREAD` | Ollama decides | CPU threads per request. |
+| `SERVICE_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` only if other devices need it). |
+| `SERVICE_PORT` | `29200` | Port. |
+| `SERVICE_ADMIN_PASSWORD` | empty | Unlocks `/admin/` and requires tokens on all calls except `/health`. Empty = no auth. |
+| `SERVICE_OLLAMA_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Must match the tag you pulled. |
+| `SERVICE_PROJECT_PREFIX` | `minicpm-` | Prefix for project models; selection works when unset. |
+| `SERVICE_OLLAMA_URL` | `http://127.0.0.1:11434` | Where Ollama is. |
+| `SERVICE_NUM_THREAD` | Ollama decides | CPU threads per request. |
 
-PowerShell: `$env:MINICPM_ADMIN_PASSWORD = "secret"; .\run.bat`
-Bash: `MINICPM_ADMIN_PASSWORD=secret python src/app.py`
+PowerShell: `$env:SERVICE_ADMIN_PASSWORD = "secret"; .\run.bat`
+Bash: `SERVICE_ADMIN_PASSWORD=secret python src/app.py`
 
 ## Check
 ```bash
@@ -62,7 +62,7 @@ FROM ./file.gguf
 
 In that folder run `ollama create minicpm-my-project -f Modelfile`. Send `"project":"my-project"`
 in `/v1/chat`. Project names match `^[a-z0-9][a-z0-9_-]{0,47}$`; invalid values return 422. Use your
-`MINICPM_PROJECT_PREFIX` if changed; its unset default is `minicpm-`. An absent project uses the base.
+`SERVICE_PROJECT_PREFIX` if changed; its unset default is `minicpm-`. An absent project uses the base.
 An uninstalled project also uses the base with `fallback: true`; replies report the selected `model`.
 `/health` adds installed `project_models`, while `ready` still checks the base model. A model made with
 `ollama create` is found at once (a miss re-asks Ollama); if the lookup fails, the base is used with `fallback: true`.
@@ -79,10 +79,10 @@ together: both use port 29200.
 ## Problems
 | Symptom | Fix |
 |---|---|
-| `ready: false` | Ollama not running, or the model tag differs from `MINICPM_OLLAMA_MODEL`. Check `ollama list`. |
+| `ready: false` | Ollama not running, or the model tag differs from `SERVICE_OLLAMA_MODEL`. Check `ollama list`. |
 | 502 on calls | Ollama down or model missing. |
-| 504 | Ollama timed out; set `MINICPM_NUM_THREAD` to real cores. |
-| Docker callers cannot reach it | Start with `MINICPM_HOST=0.0.0.0` and use `http://host.docker.internal:29200`. |
+| 504 | Ollama timed out; set `SERVICE_NUM_THREAD` to real cores. |
+| Docker callers cannot reach it | Start with `SERVICE_HOST=0.0.0.0` and use `http://host.docker.internal:29200`. |
 
 ## Tests
 `uv run pytest` (they fake Ollama).

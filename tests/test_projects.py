@@ -28,7 +28,7 @@ def test_invalid_project_is_rejected_before_ollama(project):
     ("alpha", ["minicpm-alpha:old"], "base", True),
 ])
 def test_project_routes_only_installed_models(monkeypatch, project, installed, expected, fallback):
-    monkeypatch.delenv("MINICPM_PROJECT_PREFIX", raising=False)
+    monkeypatch.delenv("SERVICE_PROJECT_PREFIX", raising=False)
     seen = []
     def handler(request):
         if request.url.path == "/api/tags":
@@ -44,7 +44,7 @@ def test_project_routes_only_installed_models(monkeypatch, project, installed, e
 
 
 def test_custom_prefix_health_inventory_and_default_readiness(monkeypatch):
-    monkeypatch.setenv("MINICPM_PROJECT_PREFIX", "custom-")
+    monkeypatch.setenv("SERVICE_PROJECT_PREFIX", "custom-")
     names = ["custom-beta:latest", "custom-alpha", "custom-beta", "custom-no:old", "custom-Upper", "minicpm-x"]
     def handler(request):
         if request.url.path == "/api/tags":

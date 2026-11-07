@@ -32,9 +32,9 @@ git clone -b live <your-repo-url> /media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model
 cd /media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model
 ```
 `.env` (deploy option 2 copies yours, or `cp .env.example .env`):
-- `MINICPM_ADMIN_PASSWORD`: set a real one.
-- `MINICPM_NUM_THREAD`: the real core count of the box.
-- `MINICPM_REPLICAS=1`, `OLLAMA_NUM_PARALLEL=2` are fine to start.
+- `SERVICE_ADMIN_PASSWORD`: set a real one.
+- `SERVICE_NUM_THREAD`: the real core count of the box.
+- `SERVICE_REPLICAS=1`, `OLLAMA_NUM_PARALLEL=2` are fine to start.
 
 ## 3. Start
 
@@ -47,7 +47,7 @@ curl http://127.0.0.1:29200/health
 
 ## 4. Let callers reach it
 
-`MINICPM_PORT` (29200) is published on all interfaces, so other devices use `http://<box-ip>:29200`.
+`SERVICE_PORT` (29200) is published on all interfaces, so other devices use `http://<box-ip>:29200`.
 1. Open `http://<box-ip>:29200/admin/`, log in, create one token per calling project.
 2. Callers send it as `X-Internal-Token`.
 3. A stack on the same box uses `http://host.docker.internal:29200`, or joins the `cnv_minicpm52b_model` network from its own
@@ -66,7 +66,7 @@ docker compose exec -w /tmp cnv_minicpm52b_model_ollama ollama create minicpm-my
 ```
 
 Call `/v1/chat` with `"project":"my-project"`. Names match `^[a-z0-9][a-z0-9_-]{0,47}$`; invalid names
-return 422. `MINICPM_PROJECT_PREFIX` defaults to `minicpm-` when unset; change the create name if customizing it.
+return 422. `SERVICE_PROJECT_PREFIX` defaults to `minicpm-` when unset; change the create name if customizing it.
 An absent project uses the base; an uninstalled project uses the base with `fallback: true`. Replies report
 the selected `model`. `/health` adds `project_models`; `ready` still checks the base. Installed names are
 cached for 30 seconds per API replica; a project not in the cache re-asks Ollama, so a new model is found at once.
@@ -78,7 +78,7 @@ raise it on Ollama only if the deployment device has RAM for multiple resident m
 ## Scaling
 
 ```powershell
-$env:MINICPM_REPLICAS = "3"
+$env:SERVICE_REPLICAS = "3"
 docker compose up -d --build
 docker compose restart cnv_minicpm52b_model_lb
 ```
@@ -126,5 +126,5 @@ The archive excludes development tools, ignored files and old ZIPs; its example 
 | Permission denied on push | run.bat Deploy option 6. |
 | `.env` seems missing | Hidden dotfile: `ls -la`. |
 | `/health` `ready: false` | Model not pulled: `docker compose logs cnv_minicpm52b_model_pull`, then `docker compose up -d`. |
-| Slow or 504 | Lower `OLLAMA_NUM_PARALLEL`, set `MINICPM_NUM_THREAD` to real cores. |
+| Slow or 504 | Lower `OLLAMA_NUM_PARALLEL`, set `SERVICE_NUM_THREAD` to real cores. |
 | nginx 502 after update or scaling | `docker compose restart cnv_minicpm52b_model_lb`. |

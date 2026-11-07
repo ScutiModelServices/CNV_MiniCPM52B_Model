@@ -8,14 +8,14 @@ on the same device, Docker on a deployment device, no Docker). Only the address 
 | Docker or `run.bat` on this PC | `http://127.0.0.1:29200/admin/` |
 | Docker on the deployment box | `http://<box-ip>:29200/admin/` |
 
-If `MINICPM_PORT` is changed, use that port.
+If `SERVICE_PORT` is changed, use that port.
 
 ## Before you open it
 
-The page needs the admin password: the value of `MINICPM_ADMIN_PASSWORD`.
+The page needs the admin password: the value of `SERVICE_ADMIN_PASSWORD`.
 - Docker: set it in `.env` next to `docker-compose.yml`, then `docker compose up -d`.
 - No Docker: set it in `.env` in this folder and start with `run.bat` (it passes `--dotenv`), or set it in the environment first; a real environment variable wins over `.env`. A plain `python src/app.py` does not read `.env`.
-- Empty password = no auth at all and the page answers `Admin password required (set MINICPM_ADMIN_PASSWORD)`. Set
+- Empty password = no auth at all and the page answers `Admin password required (set SERVICE_ADMIN_PASSWORD)`. Set
   one to use the page.
 
 ## Sign in and service status
@@ -49,9 +49,9 @@ are approximate. Request counts are added to the file with that same write; uses
 counted in memory, so a crash can lose up to a minute of them. Old token files without the field still load and show **never** until next use. A companion
 `tokens.json.lock` file serializes updates across replicas without adding dependencies.
 
-Tokens live in `tokens.json` (`MINICPM_TOKENS_FILE`). In Docker that is the `cnv_minicpm52b_model_data` volume at `/data`, so they
+Tokens live in `tokens.json` (`SERVICE_TOKENS_FILE`). In Docker that is the `cnv_minicpm52b_model_data` volume at `/data`, so they
 survive `docker compose down` and rebuilds. Without Docker it is `tokens.json` in the folder the service starts from.
-Tokens are enforced only while `MINICPM_ADMIN_PASSWORD` is set.
+Tokens are enforced only while `SERVICE_ADMIN_PASSWORD` is set.
 
 ## Ollama CPU threads
 
@@ -63,13 +63,13 @@ shows a busy indicator during saving; a short **Saved** confirmation follows. Th
 - Range 1 to 256. The field shows the value in use now (`num_thread` in `/health`; empty = Ollama decides).
 - The change applies at once to the replica that answers the click and is saved to `settings.json` next to
   `tokens.json`. Other replicas pick it up within a few seconds; no restart is needed.
-- The saved value beats `MINICPM_NUM_THREAD` from `.env`. Remove `settings.json` from the `/data` volume to go back
+- The saved value beats `SERVICE_NUM_THREAD` from `.env`. Remove `settings.json` from the `/data` volume to go back
   to the `.env` value.
 
 ## Replicas and parallel requests (read-only)
 
-The tiles show replicas and Ollama parallel requests from `MINICPM_REPLICAS` and `OLLAMA_NUM_PARALLEL`.
-The muted line says **Replicas: N. Change MINICPM_REPLICAS in .env, then rebuild.** The
+The tiles show replicas and Ollama parallel requests from `SERVICE_REPLICAS` and `OLLAMA_NUM_PARALLEL`.
+The muted line says **Replicas: N. Change SERVICE_REPLICAS in .env, then rebuild.** The
 page cannot change them. To change, set them in `.env`, then:
 ```bash
 docker compose up -d --build
@@ -83,8 +83,8 @@ set on the Ollama process itself (`OLLAMA_NUM_PARALLEL` in its environment).
 | Symptom | Fix |
 |---|---|
 | Page does not load | Service not running, wrong port, or blocked by a firewall. Test `/health`. |
-| `Wrong admin password` | Password differs from `MINICPM_ADMIN_PASSWORD` in the running container. Recreate it after editing `.env`. |
-| `Admin password required (set MINICPM_ADMIN_PASSWORD)` | The password is empty. Set it and restart. |
+| `Wrong admin password` | Password differs from `SERVICE_ADMIN_PASSWORD` in the running container. Recreate it after editing `.env`. |
+| `Admin password required (set SERVICE_ADMIN_PASSWORD)` | The password is empty. Set it and restart. |
 | Token lost | Revoke it and create a new one. |
 | `/health` shows `ready: false` | Ollama is up but the model is not pulled yet. See the run guide for `ollama pull`. |
 | Never expose port 29200 to the internet | It is a LAN tool; use a firewall or VPN for remote access. |
@@ -108,14 +108,14 @@ The **Settings** card changes options without editing `.env` or restarting: upda
 
 ## Settings on the admin page
 
-These are edited on the **Settings** card of `/admin/` and saved in `settings.json` beside the tokens, so all replicas share them: `MINICPM_UPDATE_CHECK_HOURS`, `MINICPM_MAX_INFLIGHT`, `MINICPM_CACHE_SIZE`, `MINICPM_PROJECT_PREFIX`, `MINICPM_OLLAMA_MODEL` and `MINICPM_WARM` (the last two are read at start). A saved value beats the environment variable. The compose file no longer passes them, except `MINICPM_OLLAMA_MODEL`, which the one-time `cnv_minicpm52b_model_pull` container also uses. After you change the base model and restart, pull it from the Updates card. Still in `.env`: `MINICPM_ADMIN_PASSWORD`, `MINICPM_PORT`, `MINICPM_REPLICAS`, `MINICPM_NUM_THREAD` (a starting value for the CPU threads card) and `OLLAMA_NUM_PARALLEL`.
+These are edited on the **Settings** card of `/admin/` and saved in `settings.json` beside the tokens, so all replicas share them: `SERVICE_UPDATE_CHECK_HOURS`, `SERVICE_MAX_INFLIGHT`, `SERVICE_CACHE_SIZE`, `SERVICE_PROJECT_PREFIX`, `SERVICE_OLLAMA_MODEL` and `SERVICE_WARM` (the last two are read at start). A saved value beats the environment variable. The compose file no longer passes them, except `SERVICE_OLLAMA_MODEL`, which the one-time `cnv_minicpm52b_model_pull` container also uses. After you change the base model and restart, pull it from the Updates card. Still in `.env`: `SERVICE_ADMIN_PASSWORD`, `SERVICE_PORT`, `SERVICE_REPLICAS`, `SERVICE_NUM_THREAD` (a starting value for the CPU threads card) and `OLLAMA_NUM_PARALLEL`.
 
 ## Updating the models
 
 The **Updates** card lists the configured model's local and remote manifest digests. **Check now** compares
 Ollama `/api/tags` with a read-only remote manifest request. The manifest's raw bytes are hashed with SHA-256,
 matching Ollama's manifest digest; the registry does not have to return a `Docker-Content-Digest` header.
-Checks fetch no model blobs and run every `MINICPM_UPDATE_CHECK_HOURS` (default 6); `0` disables the timer.
+Checks fetch no model blobs and run every `SERVICE_UPDATE_CHECK_HOURS` (default 6); `0` disables the timer.
 It is a digest comparison, not chronological version ordering: any changed manifest counts as an update.
 
 **Download new weights** calls Ollama `POST /api/pull` and waits for success, then sends an empty chat with

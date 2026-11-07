@@ -177,7 +177,7 @@ def test_num_thread_is_sent_to_ollama_reported_and_set_by_the_admin():
 
 
 def test_workers_are_read_only_and_admin_only(monkeypatch):
-    monkeypatch.setenv("MINICPM_REPLICAS", "3")
+    monkeypatch.setenv("SERVICE_REPLICAS", "3")
     monkeypatch.delenv("OLLAMA_NUM_PARALLEL", raising=False)
     c = client(lambda request: reply(), "admin")
     assert c.get("/admin/workers").status_code == 401
@@ -190,8 +190,8 @@ def test_saved_threads_are_loaded_only_by_main(tmp_path, monkeypatch):
     from tokens import TokenStore
     store = TokenStore(tmp_path / "tokens.json")
     settings.save(store.settings_path, num_thread=7)
-    monkeypatch.setenv("MINICPM_TOKENS_FILE", str(tmp_path / "tokens.json"))
-    monkeypatch.setenv("MINICPM_NUM_THREAD", "2")
+    monkeypatch.setenv("SERVICE_TOKENS_FILE", str(tmp_path / "tokens.json"))
+    monkeypatch.setenv("SERVICE_NUM_THREAD", "2")
     backend = OllamaClient("http://ollama", "m")
     create_app(backend, tokens=store)
     assert backend.num_thread is None
@@ -256,11 +256,11 @@ def test_warmup_sends_empty_chat_with_long_keep_alive():
 
 
 @pytest.mark.parametrize("environment,expected", [({}, (True, 6)),
-    ({"MINICPM_WARM": "0", "MINICPM_UPDATE_CHECK_HOURS": "0"}, (False, 0))])
+    ({"SERVICE_WARM": "0", "SERVICE_UPDATE_CHECK_HOURS": "0"}, (False, 0))])
 def test_main_wires_warmup_and_update_hours(monkeypatch, environment, expected):
     import app
     captured = {}
-    for name in ("MINICPM_WARM", "MINICPM_UPDATE_CHECK_HOURS"):
+    for name in ("SERVICE_WARM", "SERVICE_UPDATE_CHECK_HOURS"):
         monkeypatch.delenv(name, raising=False)
     for name, value in environment.items():
         monkeypatch.setenv(name, value)

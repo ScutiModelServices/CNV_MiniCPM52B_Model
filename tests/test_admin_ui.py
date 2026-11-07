@@ -50,7 +50,7 @@ def base_url():
         return httpx.Response(200, json={"status": "success"})
 
     ollama = OllamaClient("http://ollama", "m", transport=httpx.MockTransport(handler))
-    config = Config(Path(os.environ["MINICPM_TOKENS_FILE"]).with_name("settings.json"), SETTINGS)
+    config = Config(Path(os.environ["SERVICE_TOKENS_FILE"]).with_name("settings.json"), SETTINGS)
     config.set({"update_check_hours": 0, "warm": False})
     app = create_app(ollama, PASSWORD, config=config)
     with socket.socket() as probe:
