@@ -9,5 +9,6 @@ RUN uv sync --frozen --no-dev
 COPY src ./src
 COPY web ./web
 
-EXPOSE 9130
+ENV MINICPM_PORT=29200
+EXPOSE 29200
 CMD ["python", "src/app.py"]

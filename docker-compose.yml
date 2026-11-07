@@ -1,7 +1,7 @@
 # MiniCPM service: N API replicas behind one nginx address, all using one Ollama that holds the model.
 # Default: the Ollama already running on the host (MINICPM_OLLAMA_URL, http://host.docker.internal:11434). To run an Ollama
 # inside this stack instead, set COMPOSE_PROFILES=bundled-ollama and MINICPM_OLLAMA_URL=http://cnv_minicpm52b_model_ollama:11434 in .env.
-# Start:  docker compose up -d --build          (callers use http://<host>:9130)
+# Start:  docker compose up -d --build          (callers use http://<host>:29200)
 # Scale:  MINICPM_REPLICAS=3 docker compose up -d --build, then: docker compose restart cnv_minicpm52b_model_lb
 # Ollama queues and parallelises requests itself (OLLAMA_NUM_PARALLEL), so one copy of the model serves every replica.
 
@@ -61,7 +61,7 @@ services:
         condition: service_completed_successfully
         required: false  # only exists with the bundled-ollama profile
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9130/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:29200/health')"]
       interval: 15s
       timeout: 5s
       start_period: 10s
@@ -72,7 +72,7 @@ services:
     image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
-      - "${MINICPM_PORT:-9130}:9130"
+      - "${MINICPM_PORT:-29200}:29200"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
@@ -89,7 +89,7 @@ volumes:
   cnv_minicpm52b_model_data:
     name: cnv_minicpm52b_model_data
 networks:
-  # Other stacks reach http://cnv_minicpm52b_model_lb:9130 by joining this network.
+  # Other stacks reach http://cnv_minicpm52b_model_lb:29200 by joining this network.
   cnv_minicpm52b_model:
     name: cnv_minicpm52b_model
   citadel:

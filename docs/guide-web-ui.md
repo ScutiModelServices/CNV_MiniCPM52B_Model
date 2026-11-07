@@ -5,8 +5,8 @@ on the same device, Docker on a deployment device, no Docker). Only the address 
 
 | Run | Address |
 |---|---|
-| Docker or `run.bat` on this PC | `http://127.0.0.1:9130/admin/` |
-| Docker on the deployment box | `http://<box-ip>:9130/admin/` |
+| Docker or `run.bat` on this PC | `http://127.0.0.1:29200/admin/` |
+| Docker on the deployment box | `http://<box-ip>:29200/admin/` |
 
 If `MINICPM_PORT` is changed, use that port.
 
@@ -87,7 +87,7 @@ set on the Ollama process itself (`OLLAMA_NUM_PARALLEL` in its environment).
 | `Admin password required (set MINICPM_ADMIN_PASSWORD)` | The password is empty. Set it and restart. |
 | Token lost | Revoke it and create a new one. |
 | `/health` shows `ready: false` | Ollama is up but the model is not pulled yet. See the run guide for `ollama pull`. |
-| Never expose port 9130 to the internet | It is a LAN tool; use a firewall or VPN for remote access. |
+| Never expose port 29200 to the internet | It is a LAN tool; use a firewall or VPN for remote access. |
 
 ## Limiting a token to projects
 

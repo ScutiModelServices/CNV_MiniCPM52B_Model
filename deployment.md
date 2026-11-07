@@ -1,8 +1,8 @@
 # Deploying CNV_MiniCPM52B_Model
 
-CNV_MiniCPM52B_Model serves MiniCPM5-2B over HTTP on port 9130. FastAPI replicas (`cnv_minicpm52b_model`) sit behind nginx
+CNV_MiniCPM52B_Model serves MiniCPM5-2B over HTTP on port 29200. FastAPI replicas (`cnv_minicpm52b_model`) sit behind nginx
 (`cnv_minicpm52b_model_lb`), and all replicas use one `cnv_minicpm52b_model_ollama` host. The one-shot `cnv_minicpm52b_model_pull` service pulls
-`hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` before the API starts. Callers use `http://<host>:9130`.
+`hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` before the API starts. Callers use `http://<host>:29200`.
 
 ## Ways to run it
 

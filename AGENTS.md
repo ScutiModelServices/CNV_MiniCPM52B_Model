@@ -1,6 +1,6 @@
 # CNV_MiniCPM52B_Model
 
-MiniCPM5-2B served over HTTP in front of Ollama, behind the shared model-service admin page, tokens and settings. Port 9130, env prefix `MINICPM_`, token prefix `minicpm_`.
+MiniCPM5-2B served over HTTP in front of Ollama, behind the shared model-service admin page, tokens and settings. Port 29200, env prefix `MINICPM_`, token prefix `minicpm_`.
 
 ## Agent instructions
 This file is the one instruction file for every coding agent; `CLAUDE.md` only imports it (`@AGENTS.md`). Edit this file, never `CLAUDE.md`.

@@ -18,7 +18,7 @@ nginx.
    cp .env.example .env
    ```
    Set `MINICPM_ADMIN_PASSWORD` (empty = no auth, local-only). Defaults are fine for the rest:
-   `MINICPM_PORT=9130`, `MINICPM_REPLICAS=1`, `OLLAMA_NUM_PARALLEL=2`. Set `MINICPM_NUM_THREAD` to your real core
+   `MINICPM_PORT=29200`, `MINICPM_REPLICAS=1`, `OLLAMA_NUM_PARALLEL=2`. Set `MINICPM_NUM_THREAD` to your real core
    count (compose default 4). For another quantisation set `MINICPM_OLLAMA_MODEL=hf.co/openbmb/MiniCPM5-2B-GGUF:Q8_0`.
 2. Start:
    ```bash
@@ -28,20 +28,20 @@ nginx.
    `cnv_minicpm52b_model_pull` showing `Exited (0)` is normal.
 3. Check:
    ```bash
-   curl http://127.0.0.1:9130/health
+   curl http://127.0.0.1:29200/health
    ```
    Expect `{"status": "ok", "model": ..., "ready": true}`.
 4. Try a chat (add `-H "X-Internal-Token: <token>"` if a password is set; make tokens at
-   `http://127.0.0.1:9130/admin/`):
+   `http://127.0.0.1:29200/admin/`):
    ```bash
-   curl -X POST http://127.0.0.1:9130/v1/chat -H "Content-Type: application/json" -d '{"messages":[{"role":"user","content":"Say hi"}],"thinking":false}'
+   curl -X POST http://127.0.0.1:29200/v1/chat -H "Content-Type: application/json" -d '{"messages":[{"role":"user","content":"Say hi"}],"thinking":false}'
    ```
 
 ## Callers
 
-- From the host: `http://127.0.0.1:9130`.
-- From another Docker stack on the same host: `http://host.docker.internal:9130`, or join this stack's `cnv_minicpm52b_model`
-  network from the caller's compose file (`external: true`) and use `http://cnv_minicpm52b_model_lb:9130`. The service itself
+- From the host: `http://127.0.0.1:29200`.
+- From another Docker stack on the same host: `http://host.docker.internal:29200`, or join this stack's `cnv_minicpm52b_model`
+  network from the caller's compose file (`external: true`) and use `http://cnv_minicpm52b_model_lb:29200`. The service itself
   never references its callers.
 
 ## Registering a fine-tuned project model
@@ -71,7 +71,7 @@ increase this on Ollama only if RAM permits keeping more models loaded.
 | `MINICPM_REPLICAS` | `1` | Number of API containers, read by Compose and shown read-only in `/admin/`. |
 | `OLLAMA_MEM_LIMIT` | `0` (no cap) | RAM cap for the Ollama container, for example `6g`. Read by Compose. |
 | `OLLAMA_KEEP_ALIVE` | `5m` | How long Ollama keeps an idle model in RAM before it frees it. Read by Compose. |
-| `MINICPM_PORT` | `9130` | Published nginx port; containers always listen on 9130. Also the local service port. |
+| `MINICPM_PORT` | `29200` | Published nginx port; containers always listen on 29200. Also the local service port. |
 | `MINICPM_HOST` | `127.0.0.1` | Local bind address; the Dockerfile sets `0.0.0.0`. |
 | `MINICPM_ADMIN_PASSWORD` | empty | Unlocks `/admin/` and enables project-token auth. Empty means no auth; use only locally. |
 | `MINICPM_OLLAMA_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Model pulled and served by Ollama. |
@@ -102,7 +102,7 @@ The model volume survives rebuilds. The pull can take time on a slow connection;
 ## Check it works
 
 ```bash
-curl http://127.0.0.1:9130/health
+curl http://127.0.0.1:29200/health
 ```
 
 Expect `{"status":"ok","model":"hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M","ready":true,"num_thread":4,"project_models":[]}`
@@ -110,15 +110,15 @@ with Compose defaults. `ready` means Ollama answers and has the model pulled, no
 The endpoint needs no token. HTTP 200 by itself only proves the API is up; inspect `ready` too.
 
 ```bash
-curl -X POST http://127.0.0.1:9130/v1/chat -H "Content-Type: application/json" -H "X-Internal-Token: <token>" -d '{"messages":[{"role":"user","content":"Say hello"}],"thinking":false,"max_tokens":32}'
+curl -X POST http://127.0.0.1:29200/v1/chat -H "Content-Type: application/json" -H "X-Internal-Token: <token>" -d '{"messages":[{"role":"user","content":"Say hello"}],"thinking":false,"max_tokens":32}'
 ```
 
 The example uses shell single-quote syntax (PowerShell or bash). Omit the token header when auth is disabled.
 
 ## Network
 
-The stack owns its `cnv_minicpm52b_model` network. Other stacks can call `http://host.docker.internal:9130` on the same host,
-or join that network and call `http://cnv_minicpm52b_model_lb:9130`. Ollama's port is not published by Compose.
+The stack owns its `cnv_minicpm52b_model` network. Other stacks can call `http://host.docker.internal:29200` on the same host,
+or join that network and call `http://cnv_minicpm52b_model_lb:29200`. Ollama's port is not published by Compose.
 
 ## Daily use
 
@@ -136,7 +136,7 @@ MINICPM_REPLICAS=3 docker compose up -d --build && docker compose restart cnv_mi
 | `cnv_minicpm52b_model` never starts | `cnv_minicpm52b_model_pull` failed (no internet, wrong tag). `docker compose logs cnv_minicpm52b_model_pull`. |
 | `/health` `ready: false` | Ollama up but model missing; run `docker compose up -d` to repeat the pull. |
 | 504 | Ollama timed out; lower `OLLAMA_NUM_PARALLEL` or set `MINICPM_NUM_THREAD` to real cores. |
-| `address already in use` on 9130 | `run.bat` or another copy is running. |
+| `address already in use` on 29200 | `run.bat` or another copy is running. |
 | `cnv_minicpm52b_model_lb` never starts | API health checks have not passed; inspect `docker compose logs cnv_minicpm52b_model`. |
 | `/health` has `ready: false` | Ollama is unreachable or the configured model is missing. Check `MINICPM_OLLAMA_URL`, `MINICPM_OLLAMA_MODEL` and `ollama list`. |
 | 401 from chat | Missing or revoked project token. Make one in `/admin/`. |
@@ -145,9 +145,9 @@ MINICPM_REPLICAS=3 docker compose up -d --build && docker compose restart cnv_mi
 | 502 from chat | Ollama is down, model missing, or output did not match requested JSON. Inspect detail and Ollama logs. |
 | Ollama restarts or requests stall | Insufficient RAM for model and concurrent contexts; lower `OLLAMA_NUM_PARALLEL`. |
 | nginx 502 after scaling | Restart `cnv_minicpm52b_model_lb` to refresh replica addresses. |
-| Port 9130 already in use | Another local or Compose instance is running. Stop one or change the published port. |
+| Port 29200 already in use | Another local or Compose instance is running. Stop one or change the published port. |
 
 Note: the project README says this compose stack has not been run end to end yet, so expect to fix small things on
 the first try.
 
-The load balancer also joins external `citadel_core` as `cnv_minicpm52b_model_lb`. Start the Citadel stack first so that network exists; tool services on it use `http://cnv_minicpm52b_model_lb:9130`. Docker project and API image are `cnv_minicpm52b_model` and `cnv_minicpm52b_model:latest`; persistent volumes have explicit `cnv_minicpm52b_model_*` names. Volume migration and rollback instructions are in [CHANGELOG.md](../CHANGELOG.md).
+The load balancer also joins external `citadel_core` as `cnv_minicpm52b_model_lb`. Start the Citadel stack first so that network exists; tool services on it use `http://cnv_minicpm52b_model_lb:29200`. Docker project and API image are `cnv_minicpm52b_model` and `cnv_minicpm52b_model:latest`; persistent volumes have explicit `cnv_minicpm52b_model_*` names. Volume migration and rollback instructions are in [CHANGELOG.md](../CHANGELOG.md).

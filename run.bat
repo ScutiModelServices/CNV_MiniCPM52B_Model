@@ -1,5 +1,5 @@
 @echo off
-REM Starts the MiniCPM service on port 9130 (syncs .venv with uv on each run). Needs Ollama running with the model:
+REM Starts the MiniCPM service on port 29200 (syncs .venv with uv on each run). Needs Ollama running with the model:
 REM   ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M
 REM LABEL: MiniCPM Service
 REM DESCRIPTION: Shared HTTP service that serves MiniCPM5-2B (via Ollama) for every project.

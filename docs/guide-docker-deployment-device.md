@@ -41,17 +41,17 @@ cd /media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model
 ```bash
 docker compose up -d --build
 docker compose ps
-curl http://127.0.0.1:9130/health
+curl http://127.0.0.1:29200/health
 ```
 `cnv_minicpm52b_model_pull` ends as `Exited (0)` after downloading the model.
 
 ## 4. Let callers reach it
 
-`MINICPM_PORT` (9130) is published on all interfaces, so other devices use `http://<box-ip>:9130`.
-1. Open `http://<box-ip>:9130/admin/`, log in, create one token per calling project.
+`MINICPM_PORT` (29200) is published on all interfaces, so other devices use `http://<box-ip>:29200`.
+1. Open `http://<box-ip>:29200/admin/`, log in, create one token per calling project.
 2. Callers send it as `X-Internal-Token`.
-3. A stack on the same box uses `http://host.docker.internal:9130`, or joins the `cnv_minicpm52b_model` network from its own
-   compose file (`external: true`) and calls `http://cnv_minicpm52b_model_lb:9130`. The service never references its callers.
+3. A stack on the same box uses `http://host.docker.internal:29200`, or joins the `cnv_minicpm52b_model` network from its own
+   compose file (`external: true`) and calls `http://cnv_minicpm52b_model_lb:29200`. The service never references its callers.
 4. Firewall the port if the LAN should not reach it, and never expose it to the internet.
 
 ## Registering a fine-tuned project model

@@ -1,6 +1,6 @@
 # CNV_MiniCPM52B_Model: without Docker, same device
 
-Two processes: Ollama (holds the model) and the MiniCPM service (`src/app.py`, port 9130).
+Two processes: Ollama (holds the model) and the MiniCPM service (`src/app.py`, port 29200).
 
 ## Requirements
 - Python 3.11 or newer.
@@ -32,7 +32,7 @@ uv run python src/app.py
 | Variable | Default | Effect |
 |---|---|---|
 | `MINICPM_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` only if other devices need it). |
-| `MINICPM_PORT` | `9130` | Port. |
+| `MINICPM_PORT` | `29200` | Port. |
 | `MINICPM_ADMIN_PASSWORD` | empty | Unlocks `/admin/` and requires tokens on all calls except `/health`. Empty = no auth. |
 | `MINICPM_OLLAMA_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Must match the tag you pulled. |
 | `MINICPM_PROJECT_PREFIX` | `minicpm-` | Prefix for project models; selection works when unset. |
@@ -44,13 +44,13 @@ Bash: `MINICPM_ADMIN_PASSWORD=secret python src/app.py`
 
 ## Check
 ```bash
-curl http://127.0.0.1:9130/health
+curl http://127.0.0.1:29200/health
 ```
 Expect `"ready": true`. Then:
 ```bash
-curl -X POST http://127.0.0.1:9130/v1/chat -H "Content-Type: application/json" -d '{"messages":[{"role":"user","content":"Say hi"}],"thinking":false}'
+curl -X POST http://127.0.0.1:29200/v1/chat -H "Content-Type: application/json" -d '{"messages":[{"role":"user","content":"Say hi"}],"thinking":false}'
 ```
-(Add `-H "X-Internal-Token: <token>"` if a password is set; make tokens at `http://127.0.0.1:9130/admin/`.)
+(Add `-H "X-Internal-Token: <token>"` if a password is set; make tokens at `http://127.0.0.1:29200/admin/`.)
 
 ## Registering a fine-tuned project model
 
@@ -74,7 +74,7 @@ Setting this only on the Python service has no effect on Ollama.
 ## Stop
 
 Ctrl+C in the service terminal. Quit Ollama separately if you want the RAM back. Do not run this and the Docker stack
-together: both use port 9130.
+together: both use port 29200.
 
 ## Problems
 | Symptom | Fix |
@@ -82,7 +82,7 @@ together: both use port 9130.
 | `ready: false` | Ollama not running, or the model tag differs from `MINICPM_OLLAMA_MODEL`. Check `ollama list`. |
 | 502 on calls | Ollama down or model missing. |
 | 504 | Ollama timed out; set `MINICPM_NUM_THREAD` to real cores. |
-| Docker callers cannot reach it | Start with `MINICPM_HOST=0.0.0.0` and use `http://host.docker.internal:9130`. |
+| Docker callers cannot reach it | Start with `MINICPM_HOST=0.0.0.0` and use `http://host.docker.internal:29200`. |
 
 ## Tests
 `uv run pytest` (they fake Ollama).
