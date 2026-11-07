@@ -9,15 +9,13 @@ Every call except `/health` needs a token while `SERVICE_ADMIN_PASSWORD` is set.
 ```powershell
 $base = "http://127.0.0.1:29200"
 $pw   = @{ "X-Internal-Token" = "<SERVICE_ADMIN_PASSWORD>" }
-(Invoke-RestMethod -Method Post -Uri "$base/admin/tokens" -Headers $pw -ContentType "application/json" -Body '{"name":"cli-test"}').token
-```
-
-The token is shown once. Put it in `$h`. With no admin password set there is no auth: skip `-Headers $h`.
-
-```powershell
-$h = @{ "X-Internal-Token" = "<token from above>" }
+$tok  = (Invoke-RestMethod -Method Post -Uri "$base/admin/tokens" -Headers $pw -ContentType "application/json" -Body '{"name":"cli-test"}').token
+$tok
+$h    = @{ "X-Internal-Token" = $tok }
 Invoke-RestMethod "$base/health"
 ```
+
+`$pw` (the admin password) is for `/admin/*` only. `$h` (the token) is for `/v1/*` only; using the password there gives `Invalid token`. `$tok` prints once: save it to skip this step next time, then set `$h` from it. With no admin password set there is no auth: skip `-Headers $h`.
 
 ## Call it
 
