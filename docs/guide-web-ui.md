@@ -1,4 +1,4 @@
-# MiniCPM52BModel: the admin web UI
+# CNV_MiniCPM52B_Model: the admin web UI
 
 One page, `/admin/`, for tokens and Ollama CPU threads. It is the same for every way of running the service (Docker
 on the same device, Docker on a deployment device, no Docker). Only the address differs:
@@ -49,7 +49,7 @@ are approximate. Request counts are added to the file with that same write; uses
 counted in memory, so a crash can lose up to a minute of them. Old token files without the field still load and show **never** until next use. A companion
 `tokens.json.lock` file serializes updates across replicas without adding dependencies.
 
-Tokens live in `tokens.json` (`MINICPM_TOKENS_FILE`). In Docker that is the `tokens` volume at `/data`, so they
+Tokens live in `tokens.json` (`MINICPM_TOKENS_FILE`). In Docker that is the `cnv_minicpm52b_model_data` volume at `/data`, so they
 survive `docker compose down` and rebuilds. Without Docker it is `tokens.json` in the folder the service starts from.
 Tokens are enforced only while `MINICPM_ADMIN_PASSWORD` is set.
 
@@ -73,7 +73,7 @@ The muted line says **Replicas: N. Change MINICPM_REPLICAS in .env, then rebuild
 page cannot change them. To change, set them in `.env`, then:
 ```bash
 docker compose up -d --build
-docker compose restart minicpm_lb
+docker compose restart cnv_minicpm52b_model_lb
 ```
 `unknown` means the variable is not set, which is normal without Docker. Without Docker, Ollama's parallelism is
 set on the Ollama process itself (`OLLAMA_NUM_PARALLEL` in its environment).
@@ -108,7 +108,7 @@ The **Settings** card changes options without editing `.env` or restarting: upda
 
 ## Settings on the admin page
 
-These are edited on the **Settings** card of `/admin/` and saved in `settings.json` beside the tokens, so all replicas share them: `MINICPM_UPDATE_CHECK_HOURS`, `MINICPM_MAX_INFLIGHT`, `MINICPM_CACHE_SIZE`, `MINICPM_PROJECT_PREFIX`, `MINICPM_OLLAMA_MODEL` and `MINICPM_WARM` (the last two are read at start). A saved value beats the environment variable. The compose file no longer passes them, except `MINICPM_OLLAMA_MODEL`, which the one-time `minicpm_pull` container also uses. After you change the base model and restart, pull it from the Updates card. Still in `.env`: `MINICPM_ADMIN_PASSWORD`, `MINICPM_PORT`, `MINICPM_REPLICAS`, `MINICPM_NUM_THREAD` (a starting value for the CPU threads card) and `OLLAMA_NUM_PARALLEL`.
+These are edited on the **Settings** card of `/admin/` and saved in `settings.json` beside the tokens, so all replicas share them: `MINICPM_UPDATE_CHECK_HOURS`, `MINICPM_MAX_INFLIGHT`, `MINICPM_CACHE_SIZE`, `MINICPM_PROJECT_PREFIX`, `MINICPM_OLLAMA_MODEL` and `MINICPM_WARM` (the last two are read at start). A saved value beats the environment variable. The compose file no longer passes them, except `MINICPM_OLLAMA_MODEL`, which the one-time `cnv_minicpm52b_model_pull` container also uses. After you change the base model and restart, pull it from the Updates card. Still in `.env`: `MINICPM_ADMIN_PASSWORD`, `MINICPM_PORT`, `MINICPM_REPLICAS`, `MINICPM_NUM_THREAD` (a starting value for the CPU threads card) and `OLLAMA_NUM_PARALLEL`.
 
 ## Updating the models
 

@@ -1,14 +1,14 @@
 # MiniCPM service: N API replicas behind one nginx address, all using one Ollama that holds the model.
 # Default: the Ollama already running on the host (MINICPM_OLLAMA_URL, http://host.docker.internal:11434). To run an Ollama
-# inside this stack instead, set COMPOSE_PROFILES=bundled-ollama and MINICPM_OLLAMA_URL=http://ollama:11434 in .env.
+# inside this stack instead, set COMPOSE_PROFILES=bundled-ollama and MINICPM_OLLAMA_URL=http://cnv_minicpm52b_model_ollama:11434 in .env.
 # Start:  docker compose up -d --build          (callers use http://<host>:9130)
-# Scale:  MINICPM_REPLICAS=3 docker compose up -d --build, then: docker compose restart minicpm_lb
+# Scale:  MINICPM_REPLICAS=3 docker compose up -d --build, then: docker compose restart cnv_minicpm52b_model_lb
 # Ollama queues and parallelises requests itself (OLLAMA_NUM_PARALLEL), so one copy of the model serves every replica.
 
-name: minicpm
+name: cnv_minicpm52b_model
 
 services:
-  ollama:
+  cnv_minicpm52b_model_ollama:
     profiles: [bundled-ollama]
     image: ollama/ollama:latest
     restart: unless-stopped
@@ -19,28 +19,29 @@ services:
       OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-2}
       OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
     volumes:
-      - ollama:/root/.ollama
+      - cnv_minicpm52b_model_ollama:/root/.ollama
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s
       timeout: 5s
       start_period: 20s
-    networks: [minicpm]
+    networks: [cnv_minicpm52b_model]
 
   # One-shot: downloads the model into the ollama volume, then exits.
-  minicpm_pull:
+  cnv_minicpm52b_model_pull:
     profiles: [bundled-ollama]
     image: ollama/ollama:latest
     environment:
-      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_HOST: http://cnv_minicpm52b_model_ollama:11434
     entrypoint: ["ollama", "pull", "${MINICPM_OLLAMA_MODEL:-${MINICPM_MODEL:-hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M}}"]
     depends_on:
-      ollama:
+      cnv_minicpm52b_model_ollama:
         condition: service_healthy
-    networks: [minicpm]
+    networks: [cnv_minicpm52b_model]
 
-  minicpm:
+  cnv_minicpm52b_model:
     build: .
+    image: cnv_minicpm52b_model:latest
     restart: unless-stopped
     stop_grace_period: 90s  # uvicorn lets running calls finish on SIGTERM; Docker's default 10 s would kill a long answer
     environment:
@@ -51,12 +52,12 @@ services:
       MINICPM_REPLICAS: ${MINICPM_REPLICAS:-1}  # shown read-only on /admin/
       OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-2}  # same value Ollama runs with; shown read-only on /admin/
     volumes:
-      - tokens:/data
+      - cnv_minicpm52b_model_data:/data
     extra_hosts: ["host.docker.internal:host-gateway"]  # reaches an Ollama running on the host
     deploy:
       replicas: ${MINICPM_REPLICAS:-1}
     depends_on:
-      minicpm_pull:
+      cnv_minicpm52b_model_pull:
         condition: service_completed_successfully
         required: false  # only exists with the bundled-ollama profile
     healthcheck:
@@ -64,9 +65,10 @@ services:
       interval: 15s
       timeout: 5s
       start_period: 10s
-    networks: [minicpm]
+    networks: [cnv_minicpm52b_model]
 
-  minicpm_lb:
+  cnv_minicpm52b_model_lb:
+    container_name: cnv_minicpm52b_model_lb
     image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
@@ -74,14 +76,22 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      minicpm:
+      cnv_minicpm52b_model:
         condition: service_healthy
-    networks: [minicpm]
+    networks:
+      cnv_minicpm52b_model:
+      citadel:
+        aliases: [cnv_minicpm52b_model_lb]
 
 volumes:
-  ollama:
-  tokens:
-
+  cnv_minicpm52b_model_ollama:
+    name: cnv_minicpm52b_model_ollama
+  cnv_minicpm52b_model_data:
+    name: cnv_minicpm52b_model_data
 networks:
-  # Other stacks reach http://minicpm_lb:9130 by joining this network.
-  minicpm:
+  # Other stacks reach http://cnv_minicpm52b_model_lb:9130 by joining this network.
+  cnv_minicpm52b_model:
+    name: cnv_minicpm52b_model
+  citadel:
+    name: citadel_core
+    external: true

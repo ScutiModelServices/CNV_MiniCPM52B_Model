@@ -1,17 +1,17 @@
-# MiniCPM52BModel: Docker on a deployment device (ZimaOS server)
+# CNV_MiniCPM52B_Model: Docker on a deployment device (ZimaOS server)
 
 Run the service on a separate always-on box (default `lex@scutiserver1.local`, folder
-`/media/ZimaOS-HD/Apps/MiniCPM52BModel`). It is a self-contained compose stack (`ollama`, `minicpm_pull`, `minicpm`,
-`minicpm_lb`) with no Citadel dependency.
+`/media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model`). It is a self-contained compose stack (`cnv_minicpm52b_model_ollama`, `cnv_minicpm52b_model_pull`, `cnv_minicpm52b_model`,
+`cnv_minicpm52b_model_lb`) with no Citadel dependency.
 
 ## Requirements on the box
 
 - Docker + Compose v2, ssh access as a normal user (root over ssh is refused).
-- Internet on the first start (model pull, about 1 GB). Disk for the `ollama` volume.
+- Internet on the first start (model pull, about 1 GB). Disk for the `cnv_minicpm52b_model_ollama` volume.
 
 ## 1. Publish the code (from your PC)
 
-Run `MiniCPM52BModel\run.bat` and choose **Deploy** (or `run.bat deploy`):
+Run `CNV_MiniCPM52B_Model\run.bat` and choose **Deploy** (or `run.bat deploy`):
 
 | Option | Does |
 |---|---|
@@ -28,8 +28,8 @@ Keep your own target in the git-ignored `tools\deploy.local.ini` (copy `tools\de
 
 ```bash
 mkdir -p /media/ZimaOS-HD/Apps
-git clone -b live <your-repo-url> /media/ZimaOS-HD/Apps/MiniCPM52BModel
-cd /media/ZimaOS-HD/Apps/MiniCPM52BModel
+git clone -b live <your-repo-url> /media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model
+cd /media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model
 ```
 `.env` (deploy option 2 copies yours, or `cp .env.example .env`):
 - `MINICPM_ADMIN_PASSWORD`: set a real one.
@@ -43,15 +43,15 @@ docker compose up -d --build
 docker compose ps
 curl http://127.0.0.1:9130/health
 ```
-`minicpm_pull` ends as `Exited (0)` after downloading the model.
+`cnv_minicpm52b_model_pull` ends as `Exited (0)` after downloading the model.
 
 ## 4. Let callers reach it
 
 `MINICPM_PORT` (9130) is published on all interfaces, so other devices use `http://<box-ip>:9130`.
 1. Open `http://<box-ip>:9130/admin/`, log in, create one token per calling project.
 2. Callers send it as `X-Internal-Token`.
-3. A stack on the same box uses `http://host.docker.internal:9130`, or joins the `minicpm` network from its own
-   compose file (`external: true`) and calls `http://minicpm_lb:9130`. The service never references its callers.
+3. A stack on the same box uses `http://host.docker.internal:9130`, or joins the `cnv_minicpm52b_model` network from its own
+   compose file (`external: true`) and calls `http://cnv_minicpm52b_model_lb:9130`. The service never references its callers.
 4. Firewall the port if the LAN should not reach it, and never expose it to the internet.
 
 ## Registering a fine-tuned project model
@@ -62,7 +62,7 @@ Copy your fine-tuned GGUF to the deployment host as `file.gguf`, beside a `Model
 ```bash
 docker compose cp file.gguf ollama:/tmp/file.gguf
 docker compose cp Modelfile ollama:/tmp/Modelfile
-docker compose exec -w /tmp ollama ollama create minicpm-my-project -f Modelfile
+docker compose exec -w /tmp cnv_minicpm52b_model_ollama ollama create minicpm-my-project -f Modelfile
 ```
 
 Call `/v1/chat` with `"project":"my-project"`. Names match `^[a-z0-9][a-z0-9_-]{0,47}$`; invalid names
@@ -80,7 +80,7 @@ raise it on Ollama only if the deployment device has RAM for multiple resident m
 ```powershell
 $env:MINICPM_REPLICAS = "3"
 docker compose up -d --build
-docker compose restart minicpm_lb
+docker compose restart cnv_minicpm52b_model_lb
 ```
 
 nginx resolves replica addresses at start, so restart it after changing the count. `least_conn` balances API
@@ -93,10 +93,10 @@ repeating a slow generation could run the same turn twice. Keep these settings d
 ## Updating
 
 ```bash
-cd /media/ZimaOS-HD/Apps/MiniCPM52BModel
+cd /media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model
 git pull
 docker compose up -d --build
-docker compose restart minicpm_lb
+docker compose restart cnv_minicpm52b_model_lb
 ```
 The model and tokens volumes survive rebuilds.
 
@@ -116,7 +116,7 @@ the version in `pyproject.toml` to the same number, commit, then run `run.bat`, 
 `live-vX.Y.Z`. Different live files under an existing release version are refused; bump `VERSION`. Before an
 official release, `--replace` can move its tags.
 
-`run.bat`, Build the release ZIP, builds `_zip_versions\MiniCPM52BModel-<VERSION>.zip` and opens GitHub's new-release page.
+`run.bat`, Build the release ZIP, builds `_zip_versions\CNV_MiniCPM52B_Model-<VERSION>.zip` and opens GitHub's new-release page.
 The archive excludes development tools, ignored files and old ZIPs; its example configuration is included.
 
 ## Problems
@@ -125,6 +125,6 @@ The archive excludes development tools, ignored files and old ZIPs; its example 
 |---|---|
 | Permission denied on push | run.bat Deploy option 6. |
 | `.env` seems missing | Hidden dotfile: `ls -la`. |
-| `/health` `ready: false` | Model not pulled: `docker compose logs minicpm_pull`, then `docker compose up -d`. |
+| `/health` `ready: false` | Model not pulled: `docker compose logs cnv_minicpm52b_model_pull`, then `docker compose up -d`. |
 | Slow or 504 | Lower `OLLAMA_NUM_PARALLEL`, set `MINICPM_NUM_THREAD` to real cores. |
-| nginx 502 after update or scaling | `docker compose restart minicpm_lb`. |
+| nginx 502 after update or scaling | `docker compose restart cnv_minicpm52b_model_lb`. |

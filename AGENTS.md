@@ -1,4 +1,4 @@
-# MiniCPM52BModel
+# CNV_MiniCPM52B_Model
 
 MiniCPM5-2B served over HTTP in front of Ollama, behind the shared model-service admin page, tokens and settings. Port 9130, env prefix `MINICPM_`, token prefix `minicpm_`.
 

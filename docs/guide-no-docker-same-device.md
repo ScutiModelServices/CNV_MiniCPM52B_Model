@@ -1,4 +1,4 @@
-# MiniCPM52BModel: without Docker, same device
+# CNV_MiniCPM52B_Model: without Docker, same device
 
 Two processes: Ollama (holds the model) and the MiniCPM service (`src/app.py`, port 9130).
 
@@ -21,7 +21,7 @@ Windows: double-click `run.bat` (runs `uv sync` to create or update `.venv`, the
 
 Linux / macOS:
 ```bash
-cd MiniCPM52BModel
+cd CNV_MiniCPM52B_Model
 uv sync
 uv run python src/app.py
 ```

@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 SHARED = ("web/index.html", "web/playground.js", "src/tokens.py", "src/settings.py", "src/updates.py", ".dockerignore")
-OWN_COPY = {"src/updates.py": {"LayaModel"}}  # LayaModel keeps its own update flow (SERVICE-SPECIFIC.md)
+OWN_COPY = {"src/updates.py": {"DSC_Laya_Model"}}  # DSC_Laya_Model keeps its own update flow (SERVICE-SPECIFIC.md)
 ALLOWED = re.compile(r"^(PREFIX = |const CONFIG = )")  # per-project: token prefix and page config
 
 
@@ -20,7 +20,7 @@ def lines(path: Path) -> list[str]:
 def main() -> int:
     here = Path(__file__).resolve().parent.parent
     drift = False
-    for sibling in ('LayaModel', 'MiniCPM52BModel', 'BitNet2BModel', 'TTSPiperModel', 'TTSParadeeModel', 'TEMImageModel', 'LFM3Model', 'S1MiniModel', 'STTWhisperModel', 'STTMoonshineModel', 'TesseractModel', 'SparkX26Model', 'TTSAudio8Model', 'TTSKitten2Model', 'SGLangModel'):
+    for sibling in ('DSC_Laya_Model', 'CNV_MiniCPM52B_Model', 'CNV_BitNet2B_Model', 'TTS_Piper_Model', 'TTS_Paradee_Model', 'IMG_TEM_Model', 'CNV_LFM3_Model', 'STC_S1Mini_Model', 'STT_Whisper_Model', 'STT_Moonshine_Model', 'OCR_Tesseract_Model', 'CNV_SparkX26_Model', 'TTS_Audio8_Model', 'TTS_Kitten2_Model', 'OCR_SGLang_Model'):
         other = here.parent / sibling
         if sibling == here.name or not other.is_dir():
             continue

@@ -2,12 +2,18 @@
 
 ## Unreleased
 
+- Renamed `MiniCPM52BModel` to `CNV_MiniCPM52B_Model`; Docker project, API image, services, load balancer and volumes now use `cnv_minicpm52b_model` names. Callers on `citadel_core` connect to `cnv_minicpm52b_model_lb` at the existing port.
+- Docker volume migration: existing volumes with old names are orphaned; renaming does not move data. Stop the old stack before copying; never use `down -v`. The commands below assume the previous default Compose project name; substitute actual volume names if `-p` or `COMPOSE_PROJECT_NAME` overrode it.
+  - `minicpm_ollama` → `cnv_minicpm52b_model_ollama`: `docker volume inspect minicpm_ollama && docker volume create cnv_minicpm52b_model_ollama && docker run --rm -v minicpm_ollama:/from:ro -v cnv_minicpm52b_model_ollama:/to alpine:3.21 sh -c "cd /from && cp -a . /to/"`
+  - `minicpm_tokens` → `cnv_minicpm52b_model_data`: `docker volume inspect minicpm_tokens && docker volume create cnv_minicpm52b_model_data && docker run --rm -v minicpm_tokens:/from:ro -v cnv_minicpm52b_model_data:/to alpine:3.21 sh -c "cd /from && cp -a . /to/"`
+- To retain an old volume instead, set its top-level volume definition to `external: true` and `name: <old-volume-name>` in a local Compose override. Rollback: stop the renamed stack, restore the previous checkout and folder name, and restart the old stack with its original volumes; copy back newer data first if the renamed stack accepted writes.
+
 - `run.bat` loads `.env` from the service folder for a local run: it passes `--dotenv`, the service prints which variable names it loaded (never the values), and a real environment variable still wins. A plain `python src/app.py` and Docker never read `.env`.
 - Untracked folders now start with `.` or `_`: `zip_versions/` is `_zip_versions/`. A local `voices`, `tem_code` or `zip_versions` folder from an older checkout needs renaming by hand.
 - `run.bat` is now a menu (run the service, deploy, build the release ZIP) and `run.bat run|deploy|zip` skips it. `tools/deploy.bat`, `tools/make_zip.bat` and `tools/deploy.local.example.bat` are gone; the local deploy target is `tools/deploy.local.ini` (copy `tools/deploy.local.example.ini`).
 - Admin page: **Connect to this service** card with the addresses other services can use (this page's address, same PC, Docker network, `host.docker.internal`) and every endpoint, each with a Copy button.
 - Compose uses the Ollama already running on the host by default (`MINICPM_OLLAMA_URL`, `http://host.docker.internal:11434`), shared with other services. The bundled `ollama` and `minicpm_pull` services are now behind the `bundled-ollama` profile (`COMPOSE_PROFILES=bundled-ollama`, `MINICPM_OLLAMA_URL=http://ollama:11434`).
-- Variable names now match LFM3Model and SparkX26Model: `MINICPM_OLLAMA_URL` (was `OLLAMA_URL`) and `MINICPM_OLLAMA_MODEL` (was `MINICPM_MODEL`). The old names still work. Ollama's own variables (`OLLAMA_NUM_PARALLEL`, `OLLAMA_KEEP_ALIVE`, `OLLAMA_MEM_LIMIT`) keep their names.
+- Variable names now match CNV_LFM3_Model and CNV_SparkX26_Model: `MINICPM_OLLAMA_URL` (was `OLLAMA_URL`) and `MINICPM_OLLAMA_MODEL` (was `MINICPM_MODEL`). The old names still work. Ollama's own variables (`OLLAMA_NUM_PARALLEL`, `OLLAMA_KEEP_ALIVE`, `OLLAMA_MEM_LIMIT`) keep their names.
 
 - Admin **Try it** panel: descriptor-driven public API requests, live text streams, JSON/media output, status and latency, cancellation and redacted curl. Auth choice (b): pasted public token stays in memory; normal scope, limits and caches apply. Shared `web/playground.js` is copied across all model and tool services.
 
@@ -37,7 +43,7 @@
   cache re-asks Ollama (at most every 2 seconds); `/health` always asks. A failed lookup serves the base with `fallback: true`.
 - Document GGUF registration, CPU model reloads and `OLLAMA_MAX_LOADED_MODELS`; Compose forwards the prefix and defaults to one loaded model.
 
-- Load saved CPU thread settings in `main()`, matching LayaModel and preserving injected clients in tests.
+- Load saved CPU thread settings in `main()`, matching DSC_Laya_Model and preserving injected clients in tests.
 - Shared admin health rendering uses backend readiness and model fields while retaining each service's display.
 - Deployment reference covers the shared Ollama stack, settings, scaling, updates and releasing.
 - `MINICPM_WARM` (default `1`) loads the model with an empty chat at startup; connection failures are logged.

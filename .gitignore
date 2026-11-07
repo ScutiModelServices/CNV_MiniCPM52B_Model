@@ -24,15 +24,15 @@ tokens.json.lock
 settings.json
 .python-version
 
-# Local model files (S1MiniModel's GGUF files)
+# Local model files (STC_S1Mini_Model's GGUF files)
 .local-models/
 
-# Reference voices of a local run (TTSAudio8Model, TTSKitten2Model)
+# Reference voices of a local run (TTS_Audio8_Model, TTS_Kitten2_Model)
 _voices/
 
 # Release and deploy output
 _zip_versions/
 tools/deploy.local.ini
 
-# Fetched at build time (TEMImageModel)
+# Fetched at build time (IMG_TEM_Model)
 _tem_code/

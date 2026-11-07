@@ -1,4 +1,4 @@
-# MiniCPM52BModel
+# CNV_MiniCPM52B_Model
 
 The one place MiniCPM5-2B is served. It sits in front of Ollama; projects send it turns over HTTP instead of
 talking to Ollama or loading the model themselves. It is built as a tool-calling model: one call is one model turn,
@@ -77,10 +77,10 @@ ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M
 run.bat
 ```
 
-Docker, with a load balancer: `docker compose up -d --build`. `minicpm` runs `MINICPM_REPLICAS` API copies (default 1)
-behind nginx (`minicpm_lb`, `least_conn`, one retry), all using one Ollama that holds the model: by default the Ollama already running on the host (`MINICPM_OLLAMA_URL=http://host.docker.internal:11434`; pull the model there once, and it must listen on `0.0.0.0`), or with `COMPOSE_PROFILES=bundled-ollama` an `ollama` container in the stack, where
-`minicpm_pull` downloads it on first start. Ollama runs `OLLAMA_NUM_PARALLEL` requests at once (default 2). `MINICPM_NUM_THREAD` caps the CPU threads Ollama uses per request (`/health` reports it; `/admin/` can change and save it; other replicas apply it on restart). After
-changing the replica count, run `docker compose restart minicpm_lb`.
+Docker, with a load balancer: `docker compose up -d --build`. `cnv_minicpm52b_model` runs `MINICPM_REPLICAS` API copies (default 1)
+behind nginx (`cnv_minicpm52b_model_lb`, `least_conn`, one retry), all using one Ollama that holds the model: by default the Ollama already running on the host (`MINICPM_OLLAMA_URL=http://host.docker.internal:11434`; pull the model there once, and it must listen on `0.0.0.0`), or with `COMPOSE_PROFILES=bundled-ollama` an `cnv_minicpm52b_model_ollama` container in the stack, where
+`cnv_minicpm52b_model_pull` downloads it on first start. Ollama runs `OLLAMA_NUM_PARALLEL` requests at once (default 2). `MINICPM_NUM_THREAD` caps the CPU threads Ollama uses per request (`/health` reports it; `/admin/` can change and save it; other replicas apply it on restart). After
+changing the replica count, run `docker compose restart cnv_minicpm52b_model_lb`.
 
 ### Guides
 
@@ -118,7 +118,7 @@ The service code is MIT. It does not ship model weights: Ollama downloads MiniCP
 
 A plain publish (`run.bat`, Deploy, option 1) only updates the `live` branch, so it is fine for test deploys. A release is a separate step: set `VERSION` (and `pyproject.toml` where it has a version, to the same number), commit, then run `run.bat`, Deploy, option R or `py tools\publish_live.py --release`. That publishes to `live` and tags the `main` commit `vX.Y.Z` and the live commit `live-vX.Y.Z`. A version already released with different live files is refused, so bump `VERSION`. While a version is not officially released yet, add `--replace` to move its tags.
 
-`run.bat`, Build the release ZIP, then builds `_zip_versions\MiniCPM52BModel-<VERSION>.zip` (no `tools/`, no git-ignored files, no older ZIPs; `.env.example` is included) and opens GitHub's new-release page for the tag.
+`run.bat`, Build the release ZIP, then builds `_zip_versions\CNV_MiniCPM52B_Model-<VERSION>.zip` (no `tools/`, no git-ignored files, no older ZIPs; `.env.example` is included) and opens GitHub's new-release page for the tag.
 
 ## Try it from the admin page
 
