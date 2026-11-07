@@ -155,3 +155,13 @@ def load_env_file(path: str | os.PathLike[str]) -> list[str]:
             os.environ[key] = value
             loaded.append(key)
     return loaded
+
+
+def apply_models_dir() -> None:
+    """Points the Hugging Face cache (HF_HOME) and Ollama (OLLAMA_MODELS) at SERVICE_MODELS_DIR.
+
+    A real HF_HOME or OLLAMA_MODELS wins. Call before huggingface_hub is imported."""
+    folder = os.environ.get("SERVICE_MODELS_DIR")
+    if folder:
+        os.environ.setdefault("HF_HOME", folder)
+        os.environ.setdefault("OLLAMA_MODELS", os.path.join(folder, "ollama"))

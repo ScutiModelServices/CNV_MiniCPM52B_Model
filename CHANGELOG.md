@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `SERVICE_MODELS_DIR` sets where a local (no Docker) run keeps downloaded model weights: `settings.apply_models_dir()` maps it to `HF_HOME` and `OLLAMA_MODELS` at start.
 - Docs: `docs/guide-cli.md`, a PowerShell-only way to test the service.
 
 ### Breaking: common service environment variables

@@ -502,6 +502,7 @@ def main() -> None:
             print(f".env: loaded {', '.join(names) or 'no variables'} (names only; a real environment variable wins)", flush=True)
         else:
             print(".env: no file in the service folder", flush=True)
+    settings.apply_models_dir()  # SERVICE_MODELS_DIR -> HF_HOME / OLLAMA_MODELS
 
     store = TokenStore(os.environ.get("SERVICE_TOKENS_FILE", "tokens.json"))
     config = settings.Config(store.settings_path, SETTINGS)
@@ -512,7 +513,15 @@ def main() -> None:
         client.num_thread = int(threads)
     app = create_app(client=client, admin_password=os.environ.get("SERVICE_ADMIN_PASSWORD") or None,
                      tokens=store, config=config)
-    uvicorn.run(app, host=os.environ.get("SERVICE_HOST", "127.0.0.1"), port=int(os.environ.get("SERVICE_PORT", "29200")))
+    host, port = os.environ.get("SERVICE_HOST", "127.0.0.1"), int(os.environ.get("SERVICE_PORT", "29200"))
+
+    class Server(uvicorn.Server):
+        async def startup(self, sockets=None):
+            await super().startup(sockets)  # after uvicorn's own "running on" line
+            shown = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+            print(f"INFO:     Admin page: http://{shown}:{port}/admin/", flush=True)
+
+    Server(uvicorn.Config(app, host=host, port=port)).run()
 
 
 if __name__ == "__main__":
