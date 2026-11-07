@@ -24,6 +24,9 @@ tokens.json.lock
 settings.json
 .python-version
 
+# Local model files (S1MiniModel's GGUF files)
+.local-models/
+
 # Reference voices of a local run (TTSAudio8Model, TTSKitten2Model)
 _voices/
 
