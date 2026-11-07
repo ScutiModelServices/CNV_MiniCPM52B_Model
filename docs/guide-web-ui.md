@@ -14,8 +14,7 @@ If `MINICPM_PORT` is changed, use that port.
 
 The page needs the admin password: the value of `MINICPM_ADMIN_PASSWORD`.
 - Docker: set it in `.env` next to `docker-compose.yml`, then `docker compose up -d`.
-- No Docker: set it in the environment before starting the service (`run.bat` / `uvicorn`); the service reads the
-  real environment, not `.env`.
+- No Docker: set it in `.env` in this folder, or in the environment before starting the service (`run.bat`); a real environment variable wins over `.env`.
 - Empty password = no auth at all and the page answers `Admin password required (set MINICPM_ADMIN_PASSWORD)`. Set
   one to use the page.
 

@@ -27,7 +27,7 @@ uv run python src/app.py
 ```
 
 ## Settings
-The service reads the real environment, **not** `.env`. Set before starting:
+The service loads `.env` in this folder (copy `.env.example`); a real environment variable wins over it. Set before starting:
 
 | Variable | Default | Effect |
 |---|---|---|
