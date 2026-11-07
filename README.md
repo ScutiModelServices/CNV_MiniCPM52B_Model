@@ -129,3 +129,4 @@ Chat sends messages to `POST /v1/chat`, with optional project and generation con
 ## Documentation
 
 - [Purpose: input, output and what it is for](docs/purpose.md)
+- [Test it from the command line](docs/guide-cli.md)

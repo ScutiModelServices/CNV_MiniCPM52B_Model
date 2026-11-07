@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Docs: `docs/guide-cli.md`, a PowerShell-only way to test the service.
+
 ### Breaking: common service environment variables
 
 Service-owned environment variables now use `SERVICE_*`. Old names are no longer read.
