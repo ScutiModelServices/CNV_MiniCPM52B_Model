@@ -197,7 +197,7 @@ def test_saved_threads_are_loaded_only_by_main(tmp_path, monkeypatch):
     assert backend.num_thread is None
     captured = {}
     monkeypatch.setattr(app, "create_app", lambda **kw: captured.update(kw) or object())
-    monkeypatch.setattr("uvicorn.run", lambda *args, **kw: None)
+    monkeypatch.setattr("uvicorn.Server.run", lambda *args, **kw: None)
     app.main()
     assert captured["client"].num_thread == 7
 
@@ -265,7 +265,7 @@ def test_main_wires_warmup_and_update_hours(monkeypatch, environment, expected):
     for name, value in environment.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(app, "create_app", lambda **kw: captured.update(kw) or object())
-    monkeypatch.setattr("uvicorn.run", lambda *args, **kw: None)
+    monkeypatch.setattr("uvicorn.Server.run", lambda *args, **kw: None)
     app.main()
     config = captured["config"]
     assert (config.get("warm"), config.get("update_check_hours")) == expected
