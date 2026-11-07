@@ -11,7 +11,7 @@ Run the service on a separate always-on box (default `lex@scutiserver1.local`, f
 
 ## 1. Publish the code (from your PC)
 
-Run `MiniCPM52BModel\tools\deploy.bat`:
+Run `MiniCPM52BModel\run.bat` and choose **Deploy** (or `run.bat deploy`):
 
 | Option | Does |
 |---|---|
@@ -21,7 +21,7 @@ Run `MiniCPM52BModel\tools\deploy.bat`:
 | 4, 5 | Dry runs |
 | 6 | chown helper if option 2 says `Permission denied` |
 
-Keep your own target in the git-ignored `tools\deploy.local.bat` (copy `tools\deploy.local.example.bat`), or override it with `DEPLOY_HOST`, `DEPLOY_DIR`, `DEPLOY_WEB_PORT`. Commit `main` first: publish reads committed
+Keep your own target in the git-ignored `tools\deploy.local.ini` (copy `tools\deploy.local.example.ini`), or override it with `DEPLOY_HOST`, `DEPLOY_DIR`, `DEPLOY_WEB_PORT`. Commit `main` first: publish reads committed
 `main`. The `live` branch holds only Dockerfile, compose, nginx.conf, pyproject, src, web and README.
 
 ## 2. First-time setup on the box
@@ -110,20 +110,20 @@ All API replicas use that same Ollama. Model updates do not require per-replica 
 
 ## Releasing
 
-A plain publish (`tools\deploy.bat` option 1) updates only the `live` branch. For a release, set `VERSION` and
-the version in `pyproject.toml` to the same number, commit, then run `tools\deploy.bat` option R or
+A plain publish (`run.bat`, Deploy, option 1) updates only the `live` branch. For a release, set `VERSION` and
+the version in `pyproject.toml` to the same number, commit, then run `run.bat`, Deploy, option R or
 `uv run tools/publish_live.py --release`. This publishes `live` and tags the main commit `vX.Y.Z` and live commit
 `live-vX.Y.Z`. Different live files under an existing release version are refused; bump `VERSION`. Before an
 official release, `--replace` can move its tags.
 
-`tools\make_zip.bat` builds `zip_versions\MiniCPM52BModel-<VERSION>.zip` and opens GitHub's new-release page.
+`run.bat`, Build the release ZIP, builds `_zip_versions\MiniCPM52BModel-<VERSION>.zip` and opens GitHub's new-release page.
 The archive excludes development tools, ignored files and old ZIPs; its example configuration is included.
 
 ## Problems
 
 | Symptom | Fix |
 |---|---|
-| Permission denied on push | deploy.bat option 6. |
+| Permission denied on push | run.bat Deploy option 6. |
 | `.env` seems missing | Hidden dotfile: `ls -la`. |
 | `/health` `ready: false` | Model not pulled: `docker compose logs minicpm_pull`, then `docker compose up -d`. |
 | Slow or 504 | Lower `OLLAMA_NUM_PARALLEL`, set `MINICPM_NUM_THREAD` to real cores. |

@@ -4,8 +4,8 @@
 __pycache__
 .pytest_cache
 tests
-voices
-zip_versions
+_voices
+_zip_versions
 tokens.json
 settings.json
 .env

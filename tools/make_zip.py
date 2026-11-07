@@ -3,7 +3,7 @@
 
 Uses `git ls-files` to determine which files to include, so all
 .gitignore rules (including nested ones and negation patterns) are
-honored automatically. Output goes to zip_versions/, which is itself
+honored automatically. Output goes to _zip_versions/, which is itself
 gitignored, as <name>-<VERSION>.zip. tools/ (maintainer scripts) and
 older zips are left out; .env.example is tracked, so it is included.
 """
@@ -14,7 +14,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OUTPUT_DIR = ROOT / "zip_versions"
+OUTPUT_DIR = ROOT / "_zip_versions"
 
 
 def get_included_files() -> list[str]:
