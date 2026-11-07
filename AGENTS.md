@@ -8,7 +8,7 @@ This file is the one instruction file for every coding agent; `CLAUDE.md` only i
 ## Commands (from this folder, venv `.venv`, managed by uv)
 - Install: `uv sync` (`winget install astral-sh.uv` if uv is missing)
 - Test: `uv run pytest -q`. `tests/test_admin_ui.py` needs Playwright and its browser and is skipped without it. On Windows, if uv fails with "cannot move the file to a different disk drive", set `UV_CACHE_DIR` to a folder on the same drive and `UV_LINK_MODE=copy`.
-- Run: `run.bat run`, or `uv run python src/app.py`, or `docker compose up -d --build`
+- Run: `run.bat run`, or `uv run python src/app.py` (add `--dotenv` to load `.env`), or `docker compose up -d --build`
 
 ## Rules
 - Follow the `model-service-parity` skill and `AI/ModelServices/_docs/SHARED-FEATURES.md` (what must match in every model service) and `AI/ModelServices/_docs/SERVICE-SPECIFIC.md` (what differs on purpose). A change to a shared feature goes to every service; a new difference goes into `SERVICE-SPECIFIC.md` in the same change.

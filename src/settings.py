@@ -141,3 +141,17 @@ class Config:
                 data[key] = value
         replace(self._path, data)
         self._stamp = -1
+
+
+def load_env_file(path: str | os.PathLike[str]) -> list[str]:
+    """Sets the variables of a .env file that the environment does not already have and returns their names.
+
+    A real environment variable always wins. The values are never returned or printed."""
+    from dotenv import dotenv_values
+
+    loaded = []
+    for key, value in dotenv_values(path).items():
+        if value is not None and key not in os.environ:
+            os.environ[key] = value
+            loaded.append(key)
+    return loaded

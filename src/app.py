@@ -491,10 +491,17 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
 
 
 def main() -> None:
-    from dotenv import load_dotenv
+    import sys
+
     import uvicorn
 
-    load_dotenv(Path(__file__).resolve().parents[1] / ".env")  # a real environment variable wins over .env
+    if "--dotenv" in sys.argv[1:]:  # run.bat asks for it; a plain `python src/app.py` and Docker never read .env
+        env_file = Path(__file__).resolve().parents[1] / ".env"
+        if env_file.is_file():
+            names = settings.load_env_file(env_file)
+            print(f".env: loaded {', '.join(names) or 'no variables'} (names only; a real environment variable wins)", flush=True)
+        else:
+            print(".env: no file in the service folder", flush=True)
 
     store = TokenStore(os.environ.get("MINICPM_TOKENS_FILE", "tokens.json"))
     config = settings.Config(store.settings_path, SETTINGS)

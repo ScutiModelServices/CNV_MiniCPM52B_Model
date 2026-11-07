@@ -27,7 +27,7 @@ uv run python src/app.py
 ```
 
 ## Settings
-The service loads `.env` in this folder (copy `.env.example`); a real environment variable wins over it. Set before starting:
+`run.bat` loads `.env` in this folder (copy `.env.example`) through `--dotenv` and prints the names it loaded, never the values; a real environment variable wins over it. A plain `python src/app.py` does not read `.env`. Set before starting:
 
 | Variable | Default | Effect |
 |---|---|---|
