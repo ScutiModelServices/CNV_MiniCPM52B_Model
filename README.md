@@ -64,6 +64,10 @@ When `MINICPM_ADMIN_PASSWORD` is set, send a project token (made on `/admin/`) a
 refused the options), 502 Ollama down, model missing or invalid JSON under a `schema` (that body is
 `{"detail": {"message", "content"}}`), 504 Ollama timed out, 500 anything else.
 
+## Admin page
+
+`/admin/` (password `MINICPM_ADMIN_PASSWORD`): tokens with project scope, rate limit and expiry, usage numbers, CPU threads, the Settings card (update check hours, in-flight cap, answers kept, project prefix, model, load at start), and the Updates card (**Check now** and **Download new weights**). New weights are downloaded once into the shared models volume; the other replicas notice within a few seconds and load them on their next request. `/metrics` (admin password) is Prometheus text per token. See [the web UI guide](docs/guide-web-ui.md).
+
 ## Run
 
 Local (Ollama installed): pull the model once, then start the service.
@@ -93,10 +97,17 @@ changing the replica count, run `docker compose restart minicpm_lb`.
 (`hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`; `:Q8_0` and `:F16` also exist), `MINICPM_OLLAMA_URL` (http://127.0.0.1:11434).
 `MINICPM_PROJECT_PREFIX` defaults to `minicpm-` and prefixes project model names.
 
-## Test
+## Tests
 
 `uv sync` then `uv run pytest`. The tests fake Ollama. A manual check against the real `Q4_K_M` model got correct tool calls for simple tools
 (weather, add) and a plain refusal when no tool fit.
+
+## Limits worth knowing
+
+- One Ollama request per call; more than the in-flight cap (`max_inflight`) waiting calls get 429 with `Retry-After: 5`.
+- The rate limit and the answer cache are per replica.
+- Only `temperature` 0 answers are cached.
+- `tools`, `schema` and `thinking` are supported here and refused by the other chat services.
 
 ## License
 
@@ -109,9 +120,12 @@ A plain publish (`tools\deploy.bat` option 1) only updates the `live` branch, so
 
 `tools\make_zip.bat` then builds `zip_versions\MiniCPM52BModel-<VERSION>.zip` (no `tools/`, no git-ignored files, no older ZIPs; `.env.example` is included) and opens GitHub's new-release page for the tag.
 
-
 ## Try it from the admin page
 
 Open `/admin/` and use **Try it** to call the public API with a service token held only in memory. Runs use normal token scopes, limits and caches; the panel shows HTTP status, latency, responses, cancellation and a curl equivalent with a token placeholder. See [the web UI guide](docs/guide-web-ui.md#try-it-send-a-real-request).
 
 Chat sends messages to `POST /v1/chat`, with optional project and generation controls. Streaming appends NDJSON events as they arrive. MiniCPM also accepts thinking, tools or a JSON schema; tools and schema are mutually exclusive.
+
+## Documentation
+
+- [Purpose: input, output and what it is for](docs/purpose.md)

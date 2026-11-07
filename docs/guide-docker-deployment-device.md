@@ -5,10 +5,12 @@ Run the service on a separate always-on box (default `lex@scutiserver1.local`, f
 `minicpm_lb`) with no Citadel dependency.
 
 ## Requirements on the box
+
 - Docker + Compose v2, ssh access as a normal user (root over ssh is refused).
 - Internet on the first start (model pull, about 1 GB). Disk for the `ollama` volume.
 
 ## 1. Publish the code (from your PC)
+
 Run `MiniCPM52BModel\tools\deploy.bat`:
 
 | Option | Does |
@@ -23,6 +25,7 @@ Keep your own target in the git-ignored `tools\deploy.local.bat` (copy `tools\de
 `main`. The `live` branch holds only Dockerfile, compose, nginx.conf, pyproject, src, web and README.
 
 ## 2. First-time setup on the box
+
 ```bash
 mkdir -p /media/ZimaOS-HD/Apps
 git clone -b live <your-repo-url> /media/ZimaOS-HD/Apps/MiniCPM52BModel
@@ -34,6 +37,7 @@ cd /media/ZimaOS-HD/Apps/MiniCPM52BModel
 - `MINICPM_REPLICAS=1`, `OLLAMA_NUM_PARALLEL=2` are fine to start.
 
 ## 3. Start
+
 ```bash
 docker compose up -d --build
 docker compose ps
@@ -42,6 +46,7 @@ curl http://127.0.0.1:9130/health
 `minicpm_pull` ends as `Exited (0)` after downloading the model.
 
 ## 4. Let callers reach it
+
 `MINICPM_PORT` (9130) is published on all interfaces, so other devices use `http://<box-ip>:9130`.
 1. Open `http://<box-ip>:9130/admin/`, log in, create one token per calling project.
 2. Callers send it as `X-Internal-Token`.
@@ -70,6 +75,21 @@ If Ollama cannot list its models, the base is used with `fallback: true`.
 CPU model switches can unload and reload weights. `OLLAMA_MAX_LOADED_MODELS=1` is the Compose default;
 raise it on Ollama only if the deployment device has RAM for multiple resident models and contexts.
 
+## Scaling
+
+```powershell
+$env:MINICPM_REPLICAS = "3"
+docker compose up -d --build
+docker compose restart minicpm_lb
+```
+
+nginx resolves replica addresses at start, so restart it after changing the count. `least_conn` balances API
+requests; Ollama queues and schedules actual generations. Increasing API replicas does not create more model
+copies or change Ollama's parallelism. Tune `OLLAMA_NUM_PARALLEL` on Ollama for that.
+
+nginx allows 130-second responses and 2 MB bodies. It may retry connection errors, but never retries timeouts:
+repeating a slow generation could run the same turn twice. Keep these settings distinct from Laya's.
+
 ## Updating
 
 ```bash
@@ -80,7 +100,27 @@ docker compose restart minicpm_lb
 ```
 The model and tokens volumes survive rebuilds.
 
+To pull model weights manually through the shared Ollama host:
+
+```bash
+docker compose exec ollama ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M
+```
+
+All API replicas use that same Ollama. Model updates do not require per-replica API restarts.
+
+## Releasing
+
+A plain publish (`tools\deploy.bat` option 1) updates only the `live` branch. For a release, set `VERSION` and
+the version in `pyproject.toml` to the same number, commit, then run `tools\deploy.bat` option R or
+`uv run tools/publish_live.py --release`. This publishes `live` and tags the main commit `vX.Y.Z` and live commit
+`live-vX.Y.Z`. Different live files under an existing release version are refused; bump `VERSION`. Before an
+official release, `--replace` can move its tags.
+
+`tools\make_zip.bat` builds `zip_versions\MiniCPM52BModel-<VERSION>.zip` and opens GitHub's new-release page.
+The archive excludes development tools, ignored files and old ZIPs; its example configuration is included.
+
 ## Problems
+
 | Symptom | Fix |
 |---|---|
 | Permission denied on push | deploy.bat option 6. |

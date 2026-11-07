@@ -11,6 +11,7 @@ on the same device, Docker on a deployment device, no Docker). Only the address 
 If `MINICPM_PORT` is changed, use that port.
 
 ## Before you open it
+
 The page needs the admin password: the value of `MINICPM_ADMIN_PASSWORD`.
 - Docker: set it in `.env` next to `docker-compose.yml`, then `docker compose up -d`.
 - No Docker: set it in the environment before starting the service (`run.bat` / `uvicorn`); the service reads the
@@ -19,6 +20,7 @@ The page needs the admin password: the value of `MINICPM_ADMIN_PASSWORD`.
   one to use the page.
 
 ## Sign in and service status
+
 Type the admin password and press **Sign in**. A wrong password shows an inline `Wrong admin password` error.
 The password stays in `sessionStorage` for this browser tab, so reloading restores the session. **Sign out** clears
 the password and any freshly created token. If browser storage is blocked, sign in again after reloading.
@@ -29,6 +31,7 @@ has not made the model ready yet. Tiles show model readiness, replicas, Ollama p
 Use **Theme** to cycle between system, light, and dark appearance; this preference is saved in the browser.
 
 ## Tokens
+
 Each calling project gets its own token, so one can be revoked without touching the others.
 - **Create:** type a project name (up to 64 characters) and press **Create token**. The token appears once in
   an accent-tinted box with a **Copy** button and the reminder “Shown once. Copy it before you leave.”
@@ -52,6 +55,7 @@ survive `docker compose down` and rebuilds. Without Docker it is `tokens.json` i
 Tokens are enforced only while `MINICPM_ADMIN_PASSWORD` is set.
 
 ## Ollama CPU threads
+
 Use the synchronized slider or number field, then **Apply**. Both accept 1 to 256. Apply is disabled and
 shows a busy indicator during saving; a short **Saved** confirmation follows. The page states:
 “Saved to settings.json. Other replicas apply it within a few seconds.”
@@ -64,6 +68,7 @@ shows a busy indicator during saving; a short **Saved** confirmation follows. Th
   to the `.env` value.
 
 ## Replicas and parallel requests (read-only)
+
 The tiles show replicas and Ollama parallel requests from `MINICPM_REPLICAS` and `OLLAMA_NUM_PARALLEL`.
 The muted line says **Replicas: N. Change MINICPM_REPLICAS in .env, then rebuild.** The
 page cannot change them. To change, set them in `.env`, then:
@@ -75,6 +80,7 @@ docker compose restart minicpm_lb
 set on the Ollama process itself (`OLLAMA_NUM_PARALLEL` in its environment).
 
 ## Problems
+
 | Symptom | Fix |
 |---|---|
 | Page does not load | Service not running, wrong port, or blocked by a firewall. Test `/health`. |
@@ -100,6 +106,38 @@ When you create a token you can list the projects it may use (comma separated; e
 ## Settings
 
 The **Settings** card changes options without editing `.env` or restarting: update-check interval, caches and limits, and similar. Each row shows where its value comes from (saved, environment or default). A value saved here beats the environment variable; **Reset** removes it. Every replica reads the shared settings file, so a change applies within a few seconds. Rows marked "applies after a restart" are read once at start. The admin password, ports, replica count and other Docker settings stay in `.env` or the compose file, because the service cannot change its own container.
+
+## Settings on the admin page
+
+These are edited on the **Settings** card of `/admin/` and saved in `settings.json` beside the tokens, so all replicas share them: `MINICPM_UPDATE_CHECK_HOURS`, `MINICPM_MAX_INFLIGHT`, `MINICPM_CACHE_SIZE`, `MINICPM_PROJECT_PREFIX`, `MINICPM_OLLAMA_MODEL` and `MINICPM_WARM` (the last two are read at start). A saved value beats the environment variable. The compose file no longer passes them, except `MINICPM_OLLAMA_MODEL`, which the one-time `minicpm_pull` container also uses. After you change the base model and restart, pull it from the Updates card. Still in `.env`: `MINICPM_ADMIN_PASSWORD`, `MINICPM_PORT`, `MINICPM_REPLICAS`, `MINICPM_NUM_THREAD` (a starting value for the CPU threads card) and `OLLAMA_NUM_PARALLEL`.
+
+## Updating the models
+
+The **Updates** card lists the configured model's local and remote manifest digests. **Check now** compares
+Ollama `/api/tags` with a read-only remote manifest request. The manifest's raw bytes are hashed with SHA-256,
+matching Ollama's manifest digest; the registry does not have to return a `Docker-Content-Digest` header.
+Checks fetch no model blobs and run every `MINICPM_UPDATE_CHECK_HOURS` (default 6); `0` disables the timer.
+It is a digest comparison, not chronological version ordering: any changed manifest counts as an update.
+
+**Download new weights** calls Ollama `POST /api/pull` and waits for success, then sends an empty chat with
+`keep_alive: 0` to unload the old resident copy. The next request loads the new weights. Every API replica
+shares that Ollama, so no per-replica restart is needed. Failed downloads or unloads are shown as errors;
+retry the action if unloading failed. An explicit download action always unloads after a successful check,
+even if another replica already pulled the weights; retries therefore work through the load balancer.
+Unchanged weights are never downloaded again. The card reports model weights only, not Python package updates.
+
+The initial read-only probe of `https://hf.co/v2/openbmb/MiniCPM5-2B-GGUF/manifests/Q4_K_M` returned HTTP 200
+and manifest digest `e680c6c9f9033490cb68df7c1145f733a3a1b377b387af0937251a70d3c71a14`.
+No digest header was present; hashing the response body works. Ollama's
+[manifest persistence](https://github.com/ollama/ollama/blob/main/server/images.go) and
+[manifest hashing](https://github.com/ollama/ollama/blob/main/manifest/manifest.go) establish the comparison format.
+Live local digest equality could not be checked during implementation because localhost Ollama and Docker
+were stopped. Tests cover equal and changed digests using a fake Ollama; no real weights were downloaded.
+
+The unchanged nginx 130-second read timeout can expire before a large pull finishes. Ollama may continue that
+pull; check status again before retrying, or use the manual Ollama command above. API-side pulls allow up to
+30 minutes. Multiple replicas keep their own last-check status; **Check now** refreshes the one serving it.
+There is no MiniCPM offline flag: set update hours to `0` to stop automatic network checks.
 
 ## Connect to this service
 
