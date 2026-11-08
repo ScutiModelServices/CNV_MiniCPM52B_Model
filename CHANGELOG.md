@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Breaking: startup, warm-up and requests load downloaded weights only. First run: open `/admin/` → Updates → Download; health/admin remain available and inference returns 503 until ready.
+- Updates compares the downloaded Ollama manifest digest with the online manifest without pulling; only admin Download pulls and invalidates replicas.
+
 - `OLLAMA_NUM_PARALLEL` (read by the API) is now `SERVICE_OLLAMA_PARALLEL`, default 2. Set it to the `OLLAMA_NUM_PARALLEL` of your Ollama; Ollama's own variable keeps its name and belongs to the Ollama process.
 - Docs: `docs/guide-cli.md`, a PowerShell-only way to test the service.
 

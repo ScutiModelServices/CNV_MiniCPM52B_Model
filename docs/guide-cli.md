@@ -1,5 +1,7 @@
 # Test it from the command line
 
+First start: open `/admin/` → **Updates** → **Download**; see [the web UI guide](guide-web-ui.md#updating-the-model-files). Startup and requests load downloaded files only; an empty installation keeps health/admin available and returns 503 for inference.
+
 Calls MiniCPM 5 2B with PowerShell only, no admin page. Port 29200. Replace `<...>` values. The commands were written from the code and not yet run against a live server.
 
 ## Get a token

@@ -254,6 +254,8 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
     def http_error(error: OllamaError) -> HTTPException:
         if error.status == 400:
             return HTTPException(422, str(error))
+        if error.status in (None, 404):
+            return HTTPException(503, "Model unavailable; start Ollama and ask an admin to press Download on the Updates card.")
         if error.status == 503:  # Ollama's own queue is full
             return HTTPException(429, str(error), headers={"Retry-After": "5"})
         return HTTPException(504 if error.status == 504 else 502, str(error))

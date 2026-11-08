@@ -115,7 +115,7 @@ def test_ollama_errors_map_to_http_statuses():
         return client(lambda request: httpx.Response(code, json={"error": "nope"}))
 
     assert refuse(400).post("/v1/chat", json=BODY).status_code == 422
-    assert refuse(404).post("/v1/chat", json=BODY).status_code == 502
+    assert refuse(404).post("/v1/chat", json=BODY).status_code == 503
 
     def down(request):
         raise httpx.ConnectError("refused")
@@ -123,7 +123,7 @@ def test_ollama_errors_map_to_http_statuses():
     def slow(request):
         raise httpx.ReadTimeout("slow")
 
-    assert client(down).post("/v1/chat", json=BODY).status_code == 502
+    assert client(down).post("/v1/chat", json=BODY).status_code == 503
     assert client(slow).post("/v1/chat", json=BODY).status_code == 504
 
 

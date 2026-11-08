@@ -86,7 +86,7 @@ set on the Ollama process itself (`OLLAMA_NUM_PARALLEL` in its environment).
 | `Wrong admin password` | Password differs from `SERVICE_ADMIN_PASSWORD` in the running container. Recreate it after editing `.env`. |
 | `Admin password required (set SERVICE_ADMIN_PASSWORD)` | The password is empty. Set it and restart. |
 | Token lost | Revoke it and create a new one. |
-| `/health` shows `ready: false` | Ollama is up but the model is not pulled yet. See the run guide for `ollama pull`. |
+| `/health` shows `ready: false` | Ollama is up but the model is not pulled yet. Use **Updates** → **Download**. |
 | Never expose port 29200 to the internet | It is a LAN tool; use a firewall or VPN for remote access. |
 
 ## Limiting a token to projects
@@ -157,3 +157,13 @@ The browser caps uploads at **10 MiB**, displayed text at **256 KiB**, and binar
 ### This service's request
 
 Chat sends messages to `POST /v1/chat`, with optional project and generation controls. Streaming appends NDJSON events as they arrive. MiniCPM also accepts thinking, tools or a JSON schema; tools and schema are mutually exclusive.
+
+## Updating the model files
+
+The service loads only downloaded weights and tokenizer files. Startup, warm-up and requests never download. With no downloaded model, `/health` and `/admin/` answer, `ready` is false and inference returns 503 with an admin Download hint. First start: open `/admin/` → **Updates** → **Download**. The Updates card compares the downloaded Ollama manifest digest with the online registry manifest at startup, every `update_check_hours` and on **Check now**. Checks fetch metadata only; only **Download** runs `ollama pull`. A successful download invalidates every replica through shared storage; each replica reloads on its next request.
+
+Admin curl alternative:
+
+```bash
+curl -X POST http://127.0.0.1:29200/admin/updates/weights -H "X-Internal-Token: <ADMIN_PASSWORD>"
+```

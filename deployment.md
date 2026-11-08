@@ -1,12 +1,12 @@
 # Deploying CNV_MiniCPM52B_Model
 
 CNV_MiniCPM52B_Model serves MiniCPM5-2B over HTTP on port 29200. FastAPI replicas (`cnv_minicpm52b_model`) sit behind nginx
-(`cnv_minicpm52b_model_lb`), and all replicas call the Ollama on the host (`SERVICE_OLLAMA_URL`), which must have
-`hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` pulled. Callers use `http://<host>:29200`.
+(`cnv_minicpm52b_model_lb`), and all replicas call the Ollama on the host (`SERVICE_OLLAMA_URL`), which stores
+`hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`; the admin Updates Download action pulls it. Callers use `http://<host>:29200`.
 
 ## Ways to run it
 
-Each path has its own guide. Pick one.
+Each path has its own guide. Pick one. First start needs an explicit admin Updates Download; see the web UI guide below.
 
 | Path | Guide |
 |---|---|

@@ -74,11 +74,12 @@ def test_update_with_nothing_new_downloads_nothing():
     assert events == ["unload"]  # explicit update action also recovers an unload failed on another replica
 
 
-def test_update_refuses_when_check_failed():
+def test_explicit_download_still_runs_when_online_comparison_failed():
     updates, _, events = make(fail_remote=True)
-    with pytest.raises(RuntimeError, match="no network"):
-        run(updates.update_weights())
-    assert events == []
+    status = run(updates.update_weights())
+    assert events == ["pull", "unload"]
+    assert status["weights"][0]["cached"] == "new"
+    assert "no network" in status["error"]
 
 
 def test_failed_pull_does_not_unload_and_records_error():

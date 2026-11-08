@@ -1,12 +1,14 @@
 # CNV_MiniCPM52B_Model: Docker on a deployment device (ZimaOS server)
 
+First start: open `/admin/` → **Updates** → **Download**; see [the web UI guide](guide-web-ui.md#updating-the-model-files). Startup and requests load downloaded files only; an empty installation keeps health/admin available and returns 503 for inference.
+
 Run the service on a separate always-on box (default `lex@scutiserver1.local`, folder
 `/media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model`). It is a compose stack (`cnv_minicpm52b_model`, `cnv_minicpm52b_model_lb`) that calls the Ollama on that box.
 
 ## Requirements on the box
 
 - Docker + Compose v2, ssh access as a normal user (root over ssh is refused).
-- Ollama on the box, listening on `0.0.0.0`, with the model pulled: `ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`.
+- Ollama on the box, listening on `0.0.0.0`, running; download the model from the API admin Updates card after the service starts.
 
 ## 1. Publish the code (from your PC)
 
@@ -99,7 +101,7 @@ The model and tokens volumes survive rebuilds.
 To pull model weights manually, run this on the box (the host Ollama):
 
 ```bash
-ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M
+curl -X POST http://127.0.0.1:29200/admin/updates/weights -H "X-Internal-Token: <ADMIN_PASSWORD>"
 ```
 
 All API replicas use that same Ollama. Model updates do not require per-replica API restarts.
@@ -121,6 +123,6 @@ The archive excludes development tools, ignored files and old ZIPs; its example 
 |---|---|
 | Permission denied on push | run.bat Deploy option 6. |
 | `.env` seems missing | Hidden dotfile: `ls -la`. |
-| `/health` `ready: false` | Ollama down, not on `0.0.0.0`, or model not pulled: `ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`. |
+| `/health` `ready: false` | Ollama down, not on `0.0.0.0`, or model missing: use Updates → Download. |
 | Slow or 504 | Lower `SERVICE_OLLAMA_PARALLEL` (and Ollama's `OLLAMA_NUM_PARALLEL`), set `SERVICE_NUM_THREAD` to real cores. |
 | nginx 502 after update or scaling | `docker compose restart cnv_minicpm52b_model_lb`. |

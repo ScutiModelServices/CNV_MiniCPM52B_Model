@@ -1,12 +1,14 @@
 # CNV_MiniCPM52B_Model: Docker on the same device
 
+First start: open `/admin/` → **Updates** → **Download**; see [the web UI guide](guide-web-ui.md#updating-the-model-files). Startup and requests load downloaded files only; an empty installation keeps health/admin available and returns 503 for inference.
+
 Run the service in Docker on your own machine. It calls the Ollama already running on the host, which holds the model;
 the API replicas sit behind nginx.
 
 ## Requirements
 
 - Docker with Compose v2.
-- Ollama on the host, listening on `0.0.0.0`, with the model pulled once: `ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` (about 1.5 GB).
+- Ollama on the host, listening on `0.0.0.0`, running; download the model from the API admin Updates card after the service starts.
 - CPU is enough.
 - RAM for the model and Ollama's concurrent contexts. API replicas share one model in Ollama; they do not load
   independent torch models. Higher `OLLAMA_NUM_PARALLEL` can increase memory use.
@@ -124,7 +126,7 @@ SERVICE_REPLICAS=3 docker compose up -d --build && docker compose restart cnv_mi
 
 | Symptom | Fix |
 |---|---|
-| `/health` `ready: false` | Ollama on the host is down, not on `0.0.0.0`, or the model is missing: `ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`. |
+| `/health` `ready: false` | Ollama on the host is down, not on `0.0.0.0`, or the model is missing: use Updates → Download. |
 | 504 | Ollama timed out; lower `OLLAMA_NUM_PARALLEL` or set `SERVICE_NUM_THREAD` to real cores. |
 | `address already in use` on 29200 | `run.bat` or another copy is running. |
 | `cnv_minicpm52b_model_lb` never starts | API health checks have not passed; inspect `docker compose logs cnv_minicpm52b_model`. |

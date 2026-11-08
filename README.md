@@ -1,5 +1,7 @@
 # CNV_MiniCPM52B_Model
 
+First start: open `/admin/` → **Updates** → **Download**; see [the web UI guide](docs/guide-web-ui.md#updating-the-model-files). Startup and requests load downloaded files only; an empty installation keeps health/admin available and returns 503 for inference.
+
 The one place MiniCPM5-2B is served. It sits in front of Ollama; projects send it turns over HTTP instead of
 talking to Ollama or loading the model themselves. It is built as a tool-calling model: one call is one model turn,
 and the caller runs the tools and the loop.
@@ -66,20 +68,20 @@ refused the options), 502 Ollama down, model missing or invalid JSON under a `sc
 
 ## Admin page
 
-`/admin/` (password `SERVICE_ADMIN_PASSWORD`): tokens with project scope, rate limit and expiry, usage numbers, CPU threads, the Settings card (update check hours, in-flight cap, answers kept, project prefix, model, load at start), and the Updates card (**Check now** and **Download new weights**). New weights are downloaded once into the shared models volume; the other replicas notice within a few seconds and load them on their next request. `/metrics` (admin password) is Prometheus text per token. See [the web UI guide](docs/guide-web-ui.md).
+`/admin/` (password `SERVICE_ADMIN_PASSWORD`): tokens with project scope, rate limit and expiry, usage numbers, CPU threads, the Settings card (update check hours, in-flight cap, answers kept, project prefix, model, load at start), and the Updates card (**Check now** and **Download new weights**). Only the admin Download action pulls weights into host Ollama storage; replicas use the new weights on their next request. `/metrics` (admin password) is Prometheus text per token. See [the web UI guide](docs/guide-web-ui.md).
 
 ## Run
 
 Local (Ollama installed): pull the model once, then start the service.
 
 ```bash
-ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M
+curl -X POST http://127.0.0.1:29200/admin/updates/weights -H "X-Internal-Token: <ADMIN_PASSWORD>"
 run.bat
 ```
 
 Docker, with a load balancer: `docker compose up -d --build`. `cnv_minicpm52b_model` runs `SERVICE_REPLICAS` API copies (default 1)
 behind nginx (`cnv_minicpm52b_model_lb`, `least_conn`, one retry), all using the Ollama already running on the host (`SERVICE_OLLAMA_URL=http://host.docker.internal:11434`; it must listen on `0.0.0.0`
-and have the model pulled: `ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`). The stack does not run an Ollama. Each replica sends up to `SERVICE_OLLAMA_PARALLEL` requests at once (default 2); set it to the `OLLAMA_NUM_PARALLEL` of your Ollama. `SERVICE_NUM_THREAD` caps the CPU threads Ollama uses per request (`/health` reports it; `/admin/` can change and save it; other replicas apply it on restart). After
+then download the model from the API admin Updates card). The stack does not run an Ollama. Each replica sends up to `SERVICE_OLLAMA_PARALLEL` requests at once (default 2); set it to the `OLLAMA_NUM_PARALLEL` of your Ollama. `SERVICE_NUM_THREAD` caps the CPU threads Ollama uses per request (`/health` reports it; `/admin/` can change and save it; other replicas apply it on restart). After
 changing the replica count, run `docker compose restart cnv_minicpm52b_model_lb`.
 
 ### Guides
