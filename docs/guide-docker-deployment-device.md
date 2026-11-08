@@ -3,7 +3,7 @@
 First start: open `/admin/` → **Updates** → **Download**; see [the web UI guide](guide-web-ui.md#updating-the-model-files). Startup and requests load downloaded files only; an empty installation keeps health/admin available and returns 503 for inference.
 
 Run the service on a separate always-on box (default `lex@scutiserver1.local`, folder
-`/media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model`). It is a compose stack (`cnv_minicpm52b_model`, `cnv_minicpm52b_model_lb`) that calls the Ollama on that box.
+`/media/ZimaOS-HD/Apps/ModelServices/CNV_MiniCPM52B_Model`). It is a compose stack (`cnv_minicpm52b_model`, `cnv_minicpm52b_model_lb`) that calls the Ollama on that box.
 
 ## Requirements on the box
 
@@ -28,9 +28,9 @@ Keep your own target in the git-ignored `tools\deploy.local.ini` (copy `tools\de
 ## 2. First-time setup on the box
 
 ```bash
-mkdir -p /media/ZimaOS-HD/Apps
-git clone -b live <your-repo-url> /media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model
-cd /media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model
+mkdir -p /media/ZimaOS-HD/Apps/ModelServices
+git clone -b live <your-repo-url> /media/ZimaOS-HD/Apps/ModelServices/CNV_MiniCPM52B_Model
+cd /media/ZimaOS-HD/Apps/ModelServices/CNV_MiniCPM52B_Model
 ```
 `.env` (deploy option 2 copies yours, or `cp .env.example .env`):
 - `SERVICE_ADMIN_PASSWORD`: set a real one.
@@ -91,7 +91,7 @@ repeating a slow generation could run the same turn twice. Keep these settings d
 ## Updating
 
 ```bash
-cd /media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model
+cd /media/ZimaOS-HD/Apps/ModelServices/CNV_MiniCPM52B_Model
 git pull
 docker compose up -d --build
 docker compose restart cnv_minicpm52b_model_lb
