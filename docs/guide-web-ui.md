@@ -68,7 +68,7 @@ shows a busy indicator during saving; a short **Saved** confirmation follows. Th
 
 ## Replicas and parallel requests (read-only)
 
-The tiles show replicas and Ollama parallel requests from `SERVICE_REPLICAS` and `OLLAMA_NUM_PARALLEL`.
+The tiles show replicas and Ollama parallel requests from `SERVICE_REPLICAS` and `SERVICE_OLLAMA_PARALLEL` (set the second to the `OLLAMA_NUM_PARALLEL` of your Ollama).
 The muted line says **Replicas: N. Change SERVICE_REPLICAS in .env, then rebuild.** The
 page cannot change them. To change, set them in `.env`, then:
 ```bash

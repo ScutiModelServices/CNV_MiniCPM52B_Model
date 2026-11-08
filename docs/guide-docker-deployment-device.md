@@ -33,7 +33,7 @@ cd /media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model
 `.env` (deploy option 2 copies yours, or `cp .env.example .env`):
 - `SERVICE_ADMIN_PASSWORD`: set a real one.
 - `SERVICE_NUM_THREAD`: the real core count of the box.
-- `SERVICE_REPLICAS=1`, `OLLAMA_NUM_PARALLEL=2` are fine to start.
+- `SERVICE_REPLICAS=1`, `SERVICE_OLLAMA_PARALLEL=2` are fine to start.
 
 ## 3. Start
 
@@ -122,5 +122,5 @@ The archive excludes development tools, ignored files and old ZIPs; its example 
 | Permission denied on push | run.bat Deploy option 6. |
 | `.env` seems missing | Hidden dotfile: `ls -la`. |
 | `/health` `ready: false` | Ollama down, not on `0.0.0.0`, or model not pulled: `ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`. |
-| Slow or 504 | Lower `OLLAMA_NUM_PARALLEL`, set `SERVICE_NUM_THREAD` to real cores. |
+| Slow or 504 | Lower `SERVICE_OLLAMA_PARALLEL` (and Ollama's `OLLAMA_NUM_PARALLEL`), set `SERVICE_NUM_THREAD` to real cores. |
 | nginx 502 after update or scaling | `docker compose restart cnv_minicpm52b_model_lb`. |

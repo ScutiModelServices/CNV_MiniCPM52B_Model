@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `OLLAMA_NUM_PARALLEL` (read by the API) is now `SERVICE_OLLAMA_PARALLEL`, default 2. Set it to the `OLLAMA_NUM_PARALLEL` of your Ollama; Ollama's own variable keeps its name and belongs to the Ollama process.
 - Docs: `docs/guide-cli.md`, a PowerShell-only way to test the service.
 
 ### Breaking: common service environment variables

@@ -3,7 +3,7 @@
 # It must listen on 0.0.0.0 and have the model pulled. This stack does not run an Ollama.
 # Start:  docker compose up -d --build          (callers use http://<host>:29200)
 # Scale:  SERVICE_REPLICAS=3 docker compose up -d --build, then: docker compose restart cnv_minicpm52b_model_lb
-# Ollama queues and parallelises requests itself (OLLAMA_NUM_PARALLEL), so one copy of the model serves every replica.
+# Ollama queues and parallelises requests itself (OLLAMA_NUM_PARALLEL on your Ollama), so one copy of the model serves every replica.
 
 name: cnv_minicpm52b_model
 
@@ -19,7 +19,7 @@ services:
       SERVICE_OLLAMA_URL: ${SERVICE_OLLAMA_URL:-${OLLAMA_URL:-http://host.docker.internal:11434}}
       SERVICE_NUM_THREAD: ${SERVICE_NUM_THREAD:-4}
       SERVICE_REPLICAS: ${SERVICE_REPLICAS:-1}  # shown read-only on /admin/
-      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-2}  # same value Ollama runs with; shown read-only on /admin/
+      SERVICE_OLLAMA_PARALLEL: ${SERVICE_OLLAMA_PARALLEL:-2}  # same value Ollama runs with; shown read-only on /admin/
     volumes:
       - cnv_minicpm52b_model_data:/data
     extra_hosts: ["host.docker.internal:host-gateway"]  # reaches an Ollama running on the host

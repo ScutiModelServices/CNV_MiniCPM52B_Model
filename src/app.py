@@ -134,10 +134,10 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
             cache_size if cache_size is not None else int(os.environ.get("SERVICE_CACHE_SIZE") or 0))
 
     def inflight_limit() -> int:
-        """Calls this replica lets wait on Ollama at once; more get 429. 0 = 4 x OLLAMA_NUM_PARALLEL."""
+        """Calls this replica lets wait on Ollama at once; more get 429. 0 = 4 x SERVICE_OLLAMA_PARALLEL."""
         value = config.get("max_inflight") if config else (
             max_inflight if max_inflight is not None else int(os.environ.get("SERVICE_MAX_INFLIGHT") or 0))
-        return value or 4 * int(os.environ.get("OLLAMA_NUM_PARALLEL") or 2)
+        return value or 4 * int(os.environ.get("SERVICE_OLLAMA_PARALLEL") or 2)
 
     updates = updates or Updates(client.model, cached_sha=lambda: client.cached_sha(), remote_sha=lambda: client.remote_sha(),
                                  download=lambda: client.pull(), unload=lambda: client.unload(),
@@ -410,7 +410,7 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
             value = os.environ.get(name, "").strip()
             return int(value) if value.isdigit() else None
 
-        return {"replicas": number("SERVICE_REPLICAS"), "ollama_parallel": number("OLLAMA_NUM_PARALLEL")}
+        return {"replicas": number("SERVICE_REPLICAS"), "ollama_parallel": number("SERVICE_OLLAMA_PARALLEL")}
 
     @app.get("/admin/updates", dependencies=[Depends(admin)])
     async def update_status() -> dict[str, Any]:

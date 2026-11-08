@@ -18,7 +18,7 @@ the API replicas sit behind nginx.
    cp .env.example .env
    ```
    Set `SERVICE_ADMIN_PASSWORD` (empty = no auth, local-only). Defaults are fine for the rest:
-   `SERVICE_PORT=29200`, `SERVICE_REPLICAS=1`, `OLLAMA_NUM_PARALLEL=2`. Set `SERVICE_NUM_THREAD` to your real core
+   `SERVICE_PORT=29200`, `SERVICE_REPLICAS=1`, `SERVICE_OLLAMA_PARALLEL=2`. Set `SERVICE_NUM_THREAD` to your real core
    count (compose default 4). For another quantisation set `SERVICE_OLLAMA_MODEL=hf.co/openbmb/MiniCPM5-2B-GGUF:Q8_0`.
 2. Start:
    ```bash
@@ -73,10 +73,10 @@ increase it only if RAM permits keeping more models loaded.
 | `SERVICE_PROJECT_PREFIX` | `minicpm-` | Prefix for installed project models selected by optional chat `project`. Works when unset. |
 | `SERVICE_OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama endpoint. Compose defaults to `http://host.docker.internal:11434` (the Ollama on the host; pull the model there once). |
 | `SERVICE_UPDATE_CHECK_HOURS` | `6` | Check remote model manifests at startup and every N hours; `0` disables automatic checks. Manual checks remain available. |
-| `SERVICE_MAX_INFLIGHT` | 4 x `OLLAMA_NUM_PARALLEL` | Calls one replica lets wait on Ollama at once. More get `429` with `Retry-After: 5` instead of timing out. An Ollama `503` (its own queue is full) also becomes `429`. |
+| `SERVICE_MAX_INFLIGHT` | 4 x `SERVICE_OLLAMA_PARALLEL` | Calls one replica lets wait on Ollama at once. More get `429` with `Retry-After: 5` instead of timing out. An Ollama `503` (its own queue is full) also becomes `429`. |
 | `SERVICE_WARM` | `1` | Load the model at startup with an empty chat and a 30-minute keep-alive. `0` leaves loading to the first request. Failure is logged and does not stop the API. |
 | `SERVICE_NUM_THREAD` | Ollama decides | CPU threads per request; Compose sets `4`. Admin changes are saved and override this at next start. Other replicas apply them on restart. Use the number of physical cores (`lscpu`: cores x sockets), not logical CPUs; more threads than cores slows every call. Ollama defaults to the logical count. |
-| `OLLAMA_NUM_PARALLEL` | `2` in Compose | Parallel generations on the shared Ollama host; shown read-only in `/admin/`. |
+| `SERVICE_OLLAMA_PARALLEL` | `2` | Requests one replica sends to Ollama at once. Set it to the `OLLAMA_NUM_PARALLEL` of your Ollama; shown in `/admin/`. |
 | `SERVICE_TOKENS_FILE` | `tokens.json` | Token storage; Docker uses `/data/tokens.json` in the `cnv_minicpm52b_model_data` volume. Saved settings live beside it. |
 | `SERVICE_WEB_DIR` | repository `web/` | Admin static files; Docker uses `/app/web`. |
 
