@@ -1,13 +1,12 @@
 # CNV_MiniCPM52B_Model: Docker on a deployment device (ZimaOS server)
 
 Run the service on a separate always-on box (default `lex@scutiserver1.local`, folder
-`/media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model`). It is a self-contained compose stack (`cnv_minicpm52b_model_ollama`, `cnv_minicpm52b_model_pull`, `cnv_minicpm52b_model`,
-`cnv_minicpm52b_model_lb`) with no Citadel dependency.
+`/media/ZimaOS-HD/Apps/CNV_MiniCPM52B_Model`). It is a compose stack (`cnv_minicpm52b_model`, `cnv_minicpm52b_model_lb`) that calls the Ollama on that box.
 
 ## Requirements on the box
 
 - Docker + Compose v2, ssh access as a normal user (root over ssh is refused).
-- Internet on the first start (model pull, about 1 GB). Disk for the `cnv_minicpm52b_model_ollama` volume.
+- Ollama on the box, listening on `0.0.0.0`, with the model pulled: `ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`.
 
 ## 1. Publish the code (from your PC)
 
@@ -43,7 +42,6 @@ docker compose up -d --build
 docker compose ps
 curl http://127.0.0.1:29200/health
 ```
-`cnv_minicpm52b_model_pull` ends as `Exited (0)` after downloading the model.
 
 ## 4. Let callers reach it
 
@@ -60,9 +58,7 @@ Copy your fine-tuned GGUF to the deployment host as `file.gguf`, beside a `Model
 `FROM ./file.gguf`. In the deployment folder on that host:
 
 ```bash
-docker compose cp file.gguf ollama:/tmp/file.gguf
-docker compose cp Modelfile ollama:/tmp/Modelfile
-docker compose exec -w /tmp cnv_minicpm52b_model_ollama ollama create minicpm-my-project -f Modelfile
+ollama create minicpm-my-project -f Modelfile
 ```
 
 Call `/v1/chat` with `"project":"my-project"`. Names match `^[a-z0-9][a-z0-9_-]{0,47}$`; invalid names
@@ -72,8 +68,8 @@ the selected `model`. `/health` adds `project_models`; `ready` still checks the 
 cached for 30 seconds per API replica; a project not in the cache re-asks Ollama, so a new model is found at once.
 If Ollama cannot list its models, the base is used with `fallback: true`.
 
-CPU model switches can unload and reload weights. `OLLAMA_MAX_LOADED_MODELS=1` is the Compose default;
-raise it on Ollama only if the deployment device has RAM for multiple resident models and contexts.
+CPU model switches can unload and reload weights. Set `OLLAMA_MAX_LOADED_MODELS=1` on the host Ollama;
+raise it only if the deployment device has RAM for multiple resident models and contexts.
 
 ## Scaling
 
@@ -100,10 +96,10 @@ docker compose restart cnv_minicpm52b_model_lb
 ```
 The model and tokens volumes survive rebuilds.
 
-To pull model weights manually through the shared Ollama host:
+To pull model weights manually, run this on the box (the host Ollama):
 
 ```bash
-docker compose exec ollama ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M
+ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M
 ```
 
 All API replicas use that same Ollama. Model updates do not require per-replica API restarts.
@@ -125,6 +121,6 @@ The archive excludes development tools, ignored files and old ZIPs; its example 
 |---|---|
 | Permission denied on push | run.bat Deploy option 6. |
 | `.env` seems missing | Hidden dotfile: `ls -la`. |
-| `/health` `ready: false` | Model not pulled: `docker compose logs cnv_minicpm52b_model_pull`, then `docker compose up -d`. |
+| `/health` `ready: false` | Ollama down, not on `0.0.0.0`, or model not pulled: `ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`. |
 | Slow or 504 | Lower `OLLAMA_NUM_PARALLEL`, set `SERVICE_NUM_THREAD` to real cores. |
 | nginx 502 after update or scaling | `docker compose restart cnv_minicpm52b_model_lb`. |

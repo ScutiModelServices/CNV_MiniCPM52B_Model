@@ -53,7 +53,7 @@ copy commands. The prefix defaults to `minicpm-`, so routing works when `SERVICE
 Project selection does not train or download weights, and project tokens do not restrict model selection.
 
 On CPU, changing models can unload and reload weights, increasing latency. Set `OLLAMA_MAX_LOADED_MODELS`
-on the Ollama process to control how many models may remain loaded; Compose defaults to `1` to limit RAM.
+on the Ollama process to control how many models may remain loaded; `1` limits RAM.
 Increase it only when memory permits; API replica count does not create independent model copies.
 
 **Thinking** is on by default (`"thinking": false` turns it off). The reasoning comes back in `thinking`, and it
@@ -78,8 +78,8 @@ run.bat
 ```
 
 Docker, with a load balancer: `docker compose up -d --build`. `cnv_minicpm52b_model` runs `SERVICE_REPLICAS` API copies (default 1)
-behind nginx (`cnv_minicpm52b_model_lb`, `least_conn`, one retry), all using one Ollama that holds the model: by default the Ollama already running on the host (`SERVICE_OLLAMA_URL=http://host.docker.internal:11434`; pull the model there once, and it must listen on `0.0.0.0`), or with `COMPOSE_PROFILES=bundled-ollama` an `cnv_minicpm52b_model_ollama` container in the stack, where
-`cnv_minicpm52b_model_pull` downloads it on first start. Ollama runs `OLLAMA_NUM_PARALLEL` requests at once (default 2). `SERVICE_NUM_THREAD` caps the CPU threads Ollama uses per request (`/health` reports it; `/admin/` can change and save it; other replicas apply it on restart). After
+behind nginx (`cnv_minicpm52b_model_lb`, `least_conn`, one retry), all using the Ollama already running on the host (`SERVICE_OLLAMA_URL=http://host.docker.internal:11434`; it must listen on `0.0.0.0`
+and have the model pulled: `ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`). The stack does not run an Ollama. Ollama runs `OLLAMA_NUM_PARALLEL` requests at once (default 2). `SERVICE_NUM_THREAD` caps the CPU threads Ollama uses per request (`/health` reports it; `/admin/` can change and save it; other replicas apply it on restart). After
 changing the replica count, run `docker compose restart cnv_minicpm52b_model_lb`.
 
 ### Guides

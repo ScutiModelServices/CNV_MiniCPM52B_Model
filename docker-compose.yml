@@ -1,6 +1,6 @@
 # MiniCPM service: N API replicas behind one nginx address, all using one Ollama that holds the model.
-# Default: the Ollama already running on the host (SERVICE_OLLAMA_URL, http://host.docker.internal:11434). To run an Ollama
-# inside this stack instead, set COMPOSE_PROFILES=bundled-ollama and SERVICE_OLLAMA_URL=http://cnv_minicpm52b_model_ollama:11434 in .env.
+# All replicas call the Ollama already running on the host (SERVICE_OLLAMA_URL, default http://host.docker.internal:11434).
+# It must listen on 0.0.0.0 and have the model pulled. This stack does not run an Ollama.
 # Start:  docker compose up -d --build          (callers use http://<host>:29200)
 # Scale:  SERVICE_REPLICAS=3 docker compose up -d --build, then: docker compose restart cnv_minicpm52b_model_lb
 # Ollama queues and parallelises requests itself (OLLAMA_NUM_PARALLEL), so one copy of the model serves every replica.
@@ -8,37 +8,6 @@
 name: cnv_minicpm52b_model
 
 services:
-  cnv_minicpm52b_model_ollama:
-    profiles: [bundled-ollama]
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    mem_limit: ${OLLAMA_MEM_LIMIT:-0}  # 0 = no cap
-    stop_grace_period: 90s  # uvicorn lets running calls finish on SIGTERM; Docker's default 10 s would kill a long answer
-    environment:
-      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-5m}  # how long an idle model keeps its RAM
-      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-2}
-      OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
-    volumes:
-      - cnv_minicpm52b_model_ollama:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      start_period: 20s
-    networks: [cnv_minicpm52b_model]
-
-  # One-shot: downloads the model into the ollama volume, then exits.
-  cnv_minicpm52b_model_pull:
-    profiles: [bundled-ollama]
-    image: ollama/ollama:latest
-    environment:
-      OLLAMA_HOST: http://cnv_minicpm52b_model_ollama:11434
-    entrypoint: ["ollama", "pull", "${SERVICE_OLLAMA_MODEL:-${SERVICE_MODEL:-hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M}}"]
-    depends_on:
-      cnv_minicpm52b_model_ollama:
-        condition: service_healthy
-    networks: [cnv_minicpm52b_model]
-
   cnv_minicpm52b_model:
     build: .
     image: cnv_minicpm52b_model:latest
@@ -56,15 +25,11 @@ services:
     extra_hosts: ["host.docker.internal:host-gateway"]  # reaches an Ollama running on the host
     deploy:
       replicas: ${SERVICE_REPLICAS:-1}
-    depends_on:
-      cnv_minicpm52b_model_pull:
-        condition: service_completed_successfully
-        required: false  # only exists with the bundled-ollama profile
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:29200/health')"]
       interval: 15s
       timeout: 5s
-      start_period: 10s
+      start_period: 300s
     networks: [cnv_minicpm52b_model]
 
   cnv_minicpm52b_model_lb:
@@ -84,8 +49,6 @@ services:
         aliases: [cnv_minicpm52b_model_lb]
 
 volumes:
-  cnv_minicpm52b_model_ollama:
-    name: cnv_minicpm52b_model_ollama
   cnv_minicpm52b_model_data:
     name: cnv_minicpm52b_model_data
 networks:
