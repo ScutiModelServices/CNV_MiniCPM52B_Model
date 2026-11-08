@@ -38,7 +38,6 @@ uv run python src/app.py
 | `SERVICE_PROJECT_PREFIX` | `minicpm-` | Prefix for project models; selection works when unset. |
 | `SERVICE_OLLAMA_URL` | `http://127.0.0.1:11434` | Where Ollama is. |
 | `SERVICE_NUM_THREAD` | Ollama decides | CPU threads per request. |
-| `SERVICE_MODELS_DIR` | the library's default cache | Folder for downloaded model weights. Sets `HF_HOME` (and `OLLAMA_MODELS` to `<folder>\ollama`) at start; a real `HF_HOME` or `OLLAMA_MODELS` wins. Docker keeps weights in the `_models` volume and ignores it. |
 
 PowerShell: `$env:SERVICE_ADMIN_PASSWORD = "secret"; .\run.bat`
 Bash: `SERVICE_ADMIN_PASSWORD=secret python src/app.py`
