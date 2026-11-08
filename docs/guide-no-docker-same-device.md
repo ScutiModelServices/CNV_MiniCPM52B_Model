@@ -1,5 +1,7 @@
 # CNV_MiniCPM52B_Model: without Docker, same device
 
+First start: open `/admin/` → **Updates** → **Download**; see [the web UI guide](guide-web-ui.md#updating-the-model-files). Startup and requests load downloaded files only; an empty installation keeps health/admin available and returns 503 for inference.
+
 Two processes: Ollama (holds the model) and the MiniCPM service (`src/app.py`, port 29200).
 
 ## Requirements
@@ -11,7 +13,7 @@ Two processes: Ollama (holds the model) and the MiniCPM service (`src/app.py`, p
 Make sure Ollama is running (the Windows/macOS app starts it; on Linux run `ollama serve`). It listens on
 `127.0.0.1:11434`. Then:
 ```bash
-ollama pull hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M
+curl -X POST http://127.0.0.1:29200/admin/updates/weights -H "X-Internal-Token: <ADMIN_PASSWORD>"
 ollama list
 ```
 (`:Q8_0` and `:F16` also exist; if you use one, set `SERVICE_OLLAMA_MODEL` to the same tag.)
@@ -38,7 +40,6 @@ uv run python src/app.py
 | `SERVICE_PROJECT_PREFIX` | `minicpm-` | Prefix for project models; selection works when unset. |
 | `SERVICE_OLLAMA_URL` | `http://127.0.0.1:11434` | Where Ollama is. |
 | `SERVICE_NUM_THREAD` | Ollama decides | CPU threads per request. |
-| `SERVICE_MODELS_DIR` | the library's default cache | Folder for downloaded model weights. Sets `HF_HOME` (and `OLLAMA_MODELS` to `<folder>\ollama`) at start; a real `HF_HOME` or `OLLAMA_MODELS` wins. Docker keeps weights in the `_models` volume and ignores it. |
 
 PowerShell: `$env:SERVICE_ADMIN_PASSWORD = "secret"; .\run.bat`
 Bash: `SERVICE_ADMIN_PASSWORD=secret python src/app.py`

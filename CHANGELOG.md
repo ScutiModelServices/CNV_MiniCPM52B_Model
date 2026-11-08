@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-- `SERVICE_MODELS_DIR` sets where a local (no Docker) run keeps downloaded model weights: `settings.apply_models_dir()` maps it to `HF_HOME` and `OLLAMA_MODELS` at start.
+- Breaking: startup, warm-up and requests load downloaded weights only. First run: open `/admin/` → Updates → Download; health/admin remain available and inference returns 503 until ready.
+- Updates compares the downloaded Ollama manifest digest with the online manifest without pulling; only admin Download pulls and invalidates replicas.
+
+- `OLLAMA_NUM_PARALLEL` (read by the API) is now `SERVICE_OLLAMA_PARALLEL`, default 2. Set it to the `OLLAMA_NUM_PARALLEL` of your Ollama; Ollama's own variable keeps its name and belongs to the Ollama process.
 - Docs: `docs/guide-cli.md`, a PowerShell-only way to test the service.
 
 ### Breaking: common service environment variables
@@ -40,8 +43,8 @@ Rename old names once in your real `.env`, Compose `environment:` block, and CI/
 - Untracked folders now start with `.` or `_`: `zip_versions/` is `_zip_versions/`. A local `voices`, `tem_code` or `zip_versions` folder from an older checkout needs renaming by hand.
 - `run.bat` is now a menu (run the service, deploy, build the release ZIP) and `run.bat run|deploy|zip` skips it. `tools/deploy.bat`, `tools/make_zip.bat` and `tools/deploy.local.example.bat` are gone; the local deploy target is `tools/deploy.local.ini` (copy `tools/deploy.local.example.ini`).
 - Admin page: **Connect to this service** card with the addresses other services can use (this page's address, same PC, Docker network, `host.docker.internal`) and every endpoint, each with a Copy button.
-- Compose uses the Ollama already running on the host by default (`SERVICE_OLLAMA_URL`, `http://host.docker.internal:11434`), shared with other services. The bundled `ollama` and `minicpm_pull` services are now behind the `bundled-ollama` profile (`COMPOSE_PROFILES=bundled-ollama`, `SERVICE_OLLAMA_URL=http://ollama:11434`).
-- Variable names now match CNV_LFM3_Model and CNV_SparkX26_Model: `SERVICE_OLLAMA_URL` (was `OLLAMA_URL`) and `SERVICE_OLLAMA_MODEL` (was `SERVICE_MODEL`). The old names still work. Ollama's own variables (`OLLAMA_NUM_PARALLEL`, `OLLAMA_KEEP_ALIVE`, `OLLAMA_MEM_LIMIT`) keep their names.
+- Compose always uses the Ollama already running on the host (`SERVICE_OLLAMA_URL`, `http://host.docker.internal:11434`). The bundled `ollama` and pull services, the `bundled-ollama` profile, `COMPOSE_PROFILES`, `OLLAMA_MEM_LIMIT`, `OLLAMA_KEEP_ALIVE` and the `cnv_minicpm52b_model_ollama` volume are gone; a host Ollama must have the model pulled. Remove the unused volume with `docker volume rm cnv_minicpm52b_model_ollama` when you no longer need it. Project models are now created with `ollama create` on the host. The API health check `start_period` is 300s like the other services.
+- Variable names now match CNV_LFM3_Model and CNV_SparkX26_Model: `SERVICE_OLLAMA_URL` (was `OLLAMA_URL`) and `SERVICE_OLLAMA_MODEL` (was `SERVICE_MODEL`). The old names still work. Ollama's own variable `OLLAMA_NUM_PARALLEL` keeps its name.
 
 - Admin **Try it** panel: descriptor-driven public API requests, live text streams, JSON/media output, status and latency, cancellation and redacted curl. Auth choice (b): pasted public token stays in memory; normal scope, limits and caches apply. Shared `web/playground.js` is copied across all model and tool services.
 
@@ -50,7 +53,6 @@ Rename old names once in your real `.env`, Compose `environment:` block, and CI/
 - Compose: `stop_grace_period: 90s`, so a restart lets a running answer finish instead of cutting it off after Docker's default 10 s.
 - Docs: set CPU threads to the number of physical cores, not logical CPUs.
 - `/metrics` also returns `minicpm_request_seconds`, a histogram of how long `/v1` calls took on that replica.
-- Compose: optional `OLLAMA_MEM_LIMIT` caps the Ollama container's RAM and `OLLAMA_KEEP_ALIVE` sets how long an idle model keeps its RAM (default no cap, 5m).
 
 - Answer cache (`SERVICE_CACHE_SIZE`, default 256, 0 = off; `X-Cache` header): the last answers to identical `temperature` 0 requests are sent again without asking Ollama.
 - `POST /v1/chat` accepts `"stream": true`: the answer arrives as JSON lines (`content`, `thinking`, then `done`).

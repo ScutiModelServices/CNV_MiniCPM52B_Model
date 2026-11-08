@@ -1,12 +1,14 @@
 # CNV_MiniCPM52B_Model: Docker on the same device
 
-Run the service plus Ollama in Docker on your own machine. Ollama holds the model; the API replicas sit behind
-nginx.
+First start: open `/admin/` → **Updates** → **Download**; see [the web UI guide](guide-web-ui.md#updating-the-model-files). Startup and requests load downloaded files only; an empty installation keeps health/admin available and returns 503 for inference.
+
+Run the service in Docker on your own machine. It calls the Ollama already running on the host, which holds the model;
+the API replicas sit behind nginx.
 
 ## Requirements
 
 - Docker with Compose v2.
-- Network access on the first start: Ollama pulls the MiniCPM5-2B Q4_K_M model (about 1.5 GB). Later starts reuse the persistent `cnv_minicpm52b_model_ollama` volume.
+- Ollama on the host, listening on `0.0.0.0`, running; download the model from the API admin Updates card after the service starts.
 - CPU is enough.
 - RAM for the model and Ollama's concurrent contexts. API replicas share one model in Ollama; they do not load
   independent torch models. Higher `OLLAMA_NUM_PARALLEL` can increase memory use.
@@ -18,14 +20,13 @@ nginx.
    cp .env.example .env
    ```
    Set `SERVICE_ADMIN_PASSWORD` (empty = no auth, local-only). Defaults are fine for the rest:
-   `SERVICE_PORT=29200`, `SERVICE_REPLICAS=1`, `OLLAMA_NUM_PARALLEL=2`. Set `SERVICE_NUM_THREAD` to your real core
+   `SERVICE_PORT=29200`, `SERVICE_REPLICAS=1`, `SERVICE_OLLAMA_PARALLEL=2`. Set `SERVICE_NUM_THREAD` to your real core
    count (compose default 4). For another quantisation set `SERVICE_OLLAMA_MODEL=hf.co/openbmb/MiniCPM5-2B-GGUF:Q8_0`.
 2. Start:
    ```bash
    docker compose up -d --build
    ```
-   Order: `cnv_minicpm52b_model_ollama` starts, `cnv_minicpm52b_model_pull` downloads the model and exits, `cnv_minicpm52b_model` starts, then `cnv_minicpm52b_model_lb`.
-   `cnv_minicpm52b_model_pull` showing `Exited (0)` is normal.
+   Order: `cnv_minicpm52b_model` starts, then `cnv_minicpm52b_model_lb`.
 3. Check:
    ```bash
    curl http://127.0.0.1:29200/health
@@ -49,9 +50,7 @@ nginx.
 Copy your GGUF to this host as `file.gguf`. Beside it, create `Modelfile` containing `FROM ./file.gguf`, then:
 
 ```bash
-docker compose cp file.gguf ollama:/tmp/file.gguf
-docker compose cp Modelfile ollama:/tmp/Modelfile
-docker compose exec -w /tmp cnv_minicpm52b_model_ollama ollama create minicpm-my-project -f Modelfile
+ollama create minicpm-my-project -f Modelfile
 ```
 
 Send `"project":"my-project"` with chat requests. Names match `^[a-z0-9][a-z0-9_-]{0,47}$`; invalid names
@@ -61,28 +60,25 @@ An absent project uses the base model. A missing project model uses the base wit
 A model made with `ollama create` is found at once (a miss re-asks Ollama); if the lookup fails, the base is used
 with `fallback: true`.
 
-On CPU, model changes can reload weights and add latency. Compose sets `OLLAMA_MAX_LOADED_MODELS=1`;
-increase this on Ollama only if RAM permits keeping more models loaded.
+On CPU, model changes can reload weights and add latency. set `OLLAMA_MAX_LOADED_MODELS=1` on the host Ollama;
+increase it only if RAM permits keeping more models loaded.
 
 ## Settings
 
 | Variable | Default | Effect |
 |---|---|---|
 | `SERVICE_REPLICAS` | `1` | Number of API containers, read by Compose and shown read-only in `/admin/`. |
-| `OLLAMA_MEM_LIMIT` | `0` (no cap) | RAM cap for the Ollama container, for example `6g`. Read by Compose. |
-| `OLLAMA_KEEP_ALIVE` | `5m` | How long Ollama keeps an idle model in RAM before it frees it. Read by Compose. |
 | `SERVICE_PORT` | `29200` | Published nginx port; containers always listen on 29200. Also the local service port. |
 | `SERVICE_HOST` | `127.0.0.1` | Local bind address; the Dockerfile sets `0.0.0.0`. |
 | `SERVICE_ADMIN_PASSWORD` | empty | Unlocks `/admin/` and enables project-token auth. Empty means no auth; use only locally. |
-| `SERVICE_OLLAMA_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Model pulled and served by Ollama. |
+| `SERVICE_OLLAMA_MODEL` | `hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M` | Model name in the host Ollama; pull it there first. |
 | `SERVICE_PROJECT_PREFIX` | `minicpm-` | Prefix for installed project models selected by optional chat `project`. Works when unset. |
-| `OLLAMA_MAX_LOADED_MODELS` | `1` in Compose | Maximum resident models on Ollama; more models need more RAM. For local runs set this on the Ollama process. |
-| `SERVICE_OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama endpoint. Compose defaults to `http://host.docker.internal:11434` (the Ollama on the host; pull the model there once). With `COMPOSE_PROFILES=bundled-ollama` set it to `http://cnv_minicpm52b_model_ollama:11434` to use the Ollama container in this stack. |
+| `SERVICE_OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama endpoint. Compose defaults to `http://host.docker.internal:11434` (the Ollama on the host; pull the model there once). |
 | `SERVICE_UPDATE_CHECK_HOURS` | `6` | Check remote model manifests at startup and every N hours; `0` disables automatic checks. Manual checks remain available. |
-| `SERVICE_MAX_INFLIGHT` | 4 x `OLLAMA_NUM_PARALLEL` | Calls one replica lets wait on Ollama at once. More get `429` with `Retry-After: 5` instead of timing out. An Ollama `503` (its own queue is full) also becomes `429`. |
+| `SERVICE_MAX_INFLIGHT` | 4 x `SERVICE_OLLAMA_PARALLEL` | Calls one replica lets wait on Ollama at once. More get `429` with `Retry-After: 5` instead of timing out. An Ollama `503` (its own queue is full) also becomes `429`. |
 | `SERVICE_WARM` | `1` | Load the model at startup with an empty chat and a 30-minute keep-alive. `0` leaves loading to the first request. Failure is logged and does not stop the API. |
 | `SERVICE_NUM_THREAD` | Ollama decides | CPU threads per request; Compose sets `4`. Admin changes are saved and override this at next start. Other replicas apply them on restart. Use the number of physical cores (`lscpu`: cores x sockets), not logical CPUs; more threads than cores slows every call. Ollama defaults to the logical count. |
-| `OLLAMA_NUM_PARALLEL` | `2` in Compose | Parallel generations on the shared Ollama host; shown read-only in `/admin/`. |
+| `SERVICE_OLLAMA_PARALLEL` | `2` | Requests one replica sends to Ollama at once. Set it to the `OLLAMA_NUM_PARALLEL` of your Ollama; shown in `/admin/`. |
 | `SERVICE_TOKENS_FILE` | `tokens.json` | Token storage; Docker uses `/data/tokens.json` in the `cnv_minicpm52b_model_data` volume. Saved settings live beside it. |
 | `SERVICE_WEB_DIR` | repository `web/` | Admin static files; Docker uses `/app/web`. |
 
@@ -92,12 +88,9 @@ as `X-Internal-Token`. The admin password is only for admin routes.
 
 ## First start
 
-1. Compose starts `cnv_minicpm52b_model_ollama` and waits for its health check.
-2. `cnv_minicpm52b_model_pull` downloads the model into the shared `cnv_minicpm52b_model_ollama` volume and exits successfully.
-3. `cnv_minicpm52b_model` replicas start after that pull completes and warm the model unless warm-up is turned off on the Settings card. Their HTTP health checks let `cnv_minicpm52b_model_lb` start.
+1. `cnv_minicpm52b_model` replicas start and warm the model unless warm-up is turned off on the Settings card. Their HTTP health checks let `cnv_minicpm52b_model_lb` start.
 
-The model volume survives rebuilds. The pull can take time on a slow connection; inspect
-`docker compose logs cnv_minicpm52b_model_pull` and `docker compose ps` before retrying.
+If `ready` stays false, check that the host Ollama is running, listens on `0.0.0.0` and has the model (`ollama list`).
 
 ## Check it works
 
@@ -133,8 +126,7 @@ SERVICE_REPLICAS=3 docker compose up -d --build && docker compose restart cnv_mi
 
 | Symptom | Fix |
 |---|---|
-| `cnv_minicpm52b_model` never starts | `cnv_minicpm52b_model_pull` failed (no internet, wrong tag). `docker compose logs cnv_minicpm52b_model_pull`. |
-| `/health` `ready: false` | Ollama up but model missing; run `docker compose up -d` to repeat the pull. |
+| `/health` `ready: false` | Ollama on the host is down, not on `0.0.0.0`, or the model is missing: use Updates → Download. |
 | 504 | Ollama timed out; lower `OLLAMA_NUM_PARALLEL` or set `SERVICE_NUM_THREAD` to real cores. |
 | `address already in use` on 29200 | `run.bat` or another copy is running. |
 | `cnv_minicpm52b_model_lb` never starts | API health checks have not passed; inspect `docker compose logs cnv_minicpm52b_model`. |

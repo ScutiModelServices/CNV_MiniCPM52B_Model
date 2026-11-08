@@ -134,10 +134,10 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
             cache_size if cache_size is not None else int(os.environ.get("SERVICE_CACHE_SIZE") or 0))
 
     def inflight_limit() -> int:
-        """Calls this replica lets wait on Ollama at once; more get 429. 0 = 4 x OLLAMA_NUM_PARALLEL."""
+        """Calls this replica lets wait on Ollama at once; more get 429. 0 = 4 x SERVICE_OLLAMA_PARALLEL."""
         value = config.get("max_inflight") if config else (
             max_inflight if max_inflight is not None else int(os.environ.get("SERVICE_MAX_INFLIGHT") or 0))
-        return value or 4 * int(os.environ.get("OLLAMA_NUM_PARALLEL") or 2)
+        return value or 4 * int(os.environ.get("SERVICE_OLLAMA_PARALLEL") or 2)
 
     updates = updates or Updates(client.model, cached_sha=lambda: client.cached_sha(), remote_sha=lambda: client.remote_sha(),
                                  download=lambda: client.pull(), unload=lambda: client.unload(),
@@ -254,6 +254,8 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
     def http_error(error: OllamaError) -> HTTPException:
         if error.status == 400:
             return HTTPException(422, str(error))
+        if error.status in (None, 404):
+            return HTTPException(503, "Model unavailable; start Ollama and ask an admin to press Download on the Updates card.")
         if error.status == 503:  # Ollama's own queue is full
             return HTTPException(429, str(error), headers={"Retry-After": "5"})
         return HTTPException(504 if error.status == 504 else 502, str(error))
@@ -410,7 +412,7 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
             value = os.environ.get(name, "").strip()
             return int(value) if value.isdigit() else None
 
-        return {"replicas": number("SERVICE_REPLICAS"), "ollama_parallel": number("OLLAMA_NUM_PARALLEL")}
+        return {"replicas": number("SERVICE_REPLICAS"), "ollama_parallel": number("SERVICE_OLLAMA_PARALLEL")}
 
     @app.get("/admin/updates", dependencies=[Depends(admin)])
     async def update_status() -> dict[str, Any]:
@@ -502,7 +504,6 @@ def main() -> None:
             print(f".env: loaded {', '.join(names) or 'no variables'} (names only; a real environment variable wins)", flush=True)
         else:
             print(".env: no file in the service folder", flush=True)
-    settings.apply_models_dir()  # SERVICE_MODELS_DIR -> HF_HOME / OLLAMA_MODELS
 
     store = TokenStore(os.environ.get("SERVICE_TOKENS_FILE", "tokens.json"))
     config = settings.Config(store.settings_path, SETTINGS)
