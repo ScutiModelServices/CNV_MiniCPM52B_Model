@@ -16,6 +16,7 @@ This file is the one instruction file for every coding agent; `CLAUDE.md` only i
 - `web/index.html`, `src/tokens.py`, `src/settings.py`, `src/updates.py` and `.dockerignore` are copies shared with the other model services. Change one, copy it to the others, run `python tools/check_sync.py` in each repo.
 - The model runs in Ollama, not in this process: `src/ollama.py` is the client (its tests are `tests/test_engine.py`). Ollama has its own container and volume.
 - The only service with `tools`, `schema` and `thinking` on `POST /v1/chat`. Project models are Ollama models named with the `project_prefix` setting.
+- Variants: `src/variants.py` lists the GGUF quantizations of `openbmb/MiniCPM5-2B-GGUF` (real file sizes; the estimate is arithmetic and labelled so), `src/hardware.py` reads RAM and the GPU (the same file as in STT_Whisper_Model). The base model is the restart setting `model`, which `/admin/variant` saves; project models are never listed or changed. When Ollama is not on this machine (`client.same_machine` is False) nothing is checked or blocked.
 - Behaviour changes update `README.md`, `deployment.md`, `docs/guide-web-ui.md`, `.env.example` and `CHANGELOG.md` in the same commit.
 - Never read or print `.env`, `.env.local`, `.env.compose`, `tokens.json` or `settings.json`.
 - Commit with the noreply author email `214214011+scutiii2@users.noreply.github.com` (another address is rejected on push). Push `main`, then run `python tools/publish_live.py`. Build Docker only when the Dockerfile or the dependencies changed.

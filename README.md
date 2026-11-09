@@ -96,7 +96,7 @@ changing the replica count, run `docker compose restart cnv_minicpm52b_model_lb`
 ## Settings
 
 `SERVICE_HOST` (127.0.0.1), `SERVICE_PORT` (29200), `SERVICE_ADMIN_PASSWORD` (unlocks `/admin/`; empty = no auth), `SERVICE_OLLAMA_MODEL`
-(`hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`; `:Q8_0` and `:F16` also exist), `SERVICE_OLLAMA_URL` (http://127.0.0.1:11434).
+(`hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`; `:Q8_0` and `:F16` also exist; the admin **Model variant** card picks one this machine can run, with estimated memory use), `SERVICE_OLLAMA_URL` (http://127.0.0.1:11434).
 `SERVICE_PROJECT_PREFIX` defaults to `minicpm-` and prefixes project model names.
 
 ## Tests
