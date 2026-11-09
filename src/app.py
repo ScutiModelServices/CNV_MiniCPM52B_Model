@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 
+from disconnect import CallerGone, Measure, first_piece
 from cache import AnswerCache
 from ollama import OllamaClient, OllamaError
 from options import DEFAULT_MODEL, SETTINGS
@@ -351,7 +352,7 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
         return result
 
     @app.post("/v1/chat")
-    async def chat(body: ChatRequest, response: Response, allowed: list[str] | None = Depends(authorize),
+    async def chat(body: ChatRequest, request: Request, response: Response, allowed: list[str] | None = Depends(authorize),
                    _slot: None = Depends(slot)) -> Any:
         check_scope(allowed, body.project)
         if body.tools and body.json_schema is not None:
@@ -381,7 +382,10 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
             if body.stream:
                 chunks = client.chat_stream(messages, model=model, **options)
                 try:
-                    first = await anext(chunks, None)  # the first piece is waited for here, so a refusal is still an HTTP error
+                    first = await first_piece(request, chunks, None)  # the first piece is waited for here, so a refusal is still an HTTP error
+                except CallerGone:
+                    await chunks.aclose()
+                    return Response(status_code=499)  # nobody is listening; the generation is already stopped
                 except BaseException:
                     await chunks.aclose()
                     raise
@@ -463,16 +467,8 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
 
     latency = LatencyHistogram()
 
-    @app.middleware("http")
-    async def measure(request: Request, call_next):
-        started = time.perf_counter()
-        response = await call_next(request)
-        if request.url.path.startswith("/v1/"):
-            latency.observe(time.perf_counter() - started)
-        token_id = getattr(request.state, "token_id", None)
-        if token_id:
-            await run_in_threadpool(tokens.record, token_id, (time.perf_counter() - started) * 1000, response.status_code >= 500)
-        return response
+    app.add_middleware(Measure, observe=latency.observe,
+                       record=lambda token_id, ms, failed: run_in_threadpool(tokens.record, token_id, ms, failed))
 
     @app.get("/metrics", dependencies=[Depends(admin)])
     def metrics() -> PlainTextResponse:
