@@ -65,7 +65,7 @@ def test_pull_needs_a_success_status_and_unload_drops_the_resident_model_and_cha
     before = client.generation
     run(client.unload())
     assert client.generation == before + 1
-    assert sent[0] == ("/api/pull", {"model": "m", "stream": False})
+    assert sent[0] == ("/api/pull", {"model": "m", "stream": True})
     assert sent[1][0] == "/api/chat" and sent[1][1]["keep_alive"] == 0 and sent[1][1]["messages"] == []
     with pytest.raises(OllamaError):
         run(make(lambda request: httpx.Response(200, json={"status": "pulling"})).pull())

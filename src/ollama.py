@@ -76,8 +76,19 @@ class OllamaClient:
 
     async def pull(self) -> None:
         """Ollama reuses unchanged blobs; allow a long download without buffering progress events."""
-        result = await self._post("/api/pull", {"model": self.model, "stream": False}, timeout=1800.0)
-        if result.get("status") != "success":
+        from progress import PullTracker
+
+        tracker = PullTracker(self.model)
+        try:
+            async with self._http.stream("POST", "/api/pull", json={"model": self.model, "stream": True}, timeout=1800.0) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    tracker.feed(line)
+        except (httpx.HTTPError, RuntimeError) as error:
+            raise OllamaError(f"Ollama pull failed: {error}") from None
+        finally:
+            tracker.close()
+        if tracker.status != "success":
             raise OllamaError("Ollama did not finish pulling the model")
 
     async def unload(self) -> None:

@@ -206,7 +206,7 @@ def test_client_pull_then_unload_payloads():
             await backend.close()
 
     run(scenario())
-    assert seen == [("/api/pull", {"model": "m", "stream": False}),
+    assert seen == [("/api/pull", {"model": "m", "stream": True}),
                     ("/api/chat", {"model": "m", "messages": [], "stream": False, "keep_alive": 0})]
 
 
