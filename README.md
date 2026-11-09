@@ -79,7 +79,7 @@ curl -X POST http://127.0.0.1:29200/admin/updates/weights -H "X-Internal-Token: 
 run.bat
 ```
 
-Docker, with a load balancer: `docker compose up -d --build`. `cnv_minicpm52b_model` runs `SERVICE_REPLICAS` API copies (default 1)
+Docker, with a load balancer: `docker compose --env-file .env.compose up -d --build`. `cnv_minicpm52b_model` runs `SERVICE_REPLICAS` API copies (default 1)
 behind nginx (`cnv_minicpm52b_model_lb`, `least_conn`, one retry), all using the Ollama already running on the host (`SERVICE_OLLAMA_URL=http://host.docker.internal:11434`; it must listen on `0.0.0.0`
 then download the model from the API admin Updates card). The stack does not run an Ollama. Each replica sends up to `SERVICE_OLLAMA_PARALLEL` requests at once (default 2); set it to the `OLLAMA_NUM_PARALLEL` of your Ollama. `SERVICE_NUM_THREAD` caps the CPU threads Ollama uses per request (`/health` reports it; `/admin/` can change and save it; other replicas apply it on restart). After
 changing the replica count, run `docker compose restart cnv_minicpm52b_model_lb`.

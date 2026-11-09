@@ -12,8 +12,9 @@ If `SERVICE_PORT` is changed, use that port.
 ## Before you open it
 
 The page needs the admin password: the value of `SERVICE_ADMIN_PASSWORD`.
-- Docker: set it in `.env` next to `docker-compose.yml`, then `docker compose up -d`.
-- No Docker: set it in `.env` in this folder and start with `run.bat` (it passes `--dotenv`), or set it in the environment first; a real environment variable wins over `.env`. A plain `python src/app.py` does not read `.env`.
+- Docker Desktop on this device: set it in `.env.compose` next to `docker-compose.yml`, then `docker compose --env-file .env.compose up -d`.
+- Deployment device: set it in `.env` next to `docker-compose.yml` (Deploy option 2 copies it), then `docker compose up -d`.
+- No Docker: set it in `.env.local` (or `.env`) in this folder and start with `run.bat` (it passes `--dotenv`), or set it in the environment first; a real environment variable wins over both files and `.env.local` wins over `.env`. A plain `python src/app.py` reads neither.
 - Empty password = no auth at all and the page answers `Admin password required (set SERVICE_ADMIN_PASSWORD)`. Set
   one to use the page.
 
@@ -62,16 +63,16 @@ shows a busy indicator during saving; a short **Saved** confirmation follows. Th
 - Range 1 to 256. The field shows the value in use now (`num_thread` in `/health`; empty = Ollama decides).
 - The change applies at once to the replica that answers the click and is saved to `settings.json` next to
   `tokens.json`. Other replicas pick it up within a few seconds; no restart is needed.
-- The saved value beats `SERVICE_NUM_THREAD` from `.env`. Remove `settings.json` from the `/data` volume to go back
-  to the `.env` value.
+- The saved value beats `SERVICE_NUM_THREAD` from the env file (`.env.compose` or `.env`). Remove `settings.json` from the `/data` volume to go back
+  to the env-file value.
 
 ## Replicas and parallel requests (read-only)
 
 The tiles show replicas and Ollama parallel requests from `SERVICE_REPLICAS` and `SERVICE_OLLAMA_PARALLEL` (set the second to the `OLLAMA_NUM_PARALLEL` of your Ollama).
-The muted line says **Replicas: N. Change SERVICE_REPLICAS in .env, then rebuild.** The
-page cannot change them. To change, set them in `.env`, then:
+The muted line says **Replicas: N. Change SERVICE_REPLICAS in .env.compose (or .env on the deployment device), then rebuild.** The
+page cannot change them. To change, set them in `.env.compose` (or `.env` on the deployment device), then:
 ```bash
-docker compose up -d --build
+docker compose --env-file .env.compose up -d --build
 docker compose restart cnv_minicpm52b_model_lb
 ```
 `unknown` means the variable is not set, which is normal without Docker. Without Docker, Ollama's parallelism is
@@ -82,7 +83,7 @@ set on the Ollama process itself (`OLLAMA_NUM_PARALLEL` in its environment).
 | Symptom | Fix |
 |---|---|
 | Page does not load | Service not running, wrong port, or blocked by a firewall. Test `/health`. |
-| `Wrong admin password` | Password differs from `SERVICE_ADMIN_PASSWORD` in the running container. Recreate it after editing `.env`. |
+| `Wrong admin password` | Password differs from `SERVICE_ADMIN_PASSWORD` in the running container. Recreate it after editing `.env.compose` or `.env`. |
 | `Admin password required (set SERVICE_ADMIN_PASSWORD)` | The password is empty. Set it and restart. |
 | Token lost | Revoke it and create a new one. |
 | `/health` shows `ready: false` | Ollama is up but the model is not pulled yet. Use **Updates** → **Download**. |
@@ -103,7 +104,7 @@ When you create a token you can list the projects it may use (comma separated; e
 
 ## Settings
 
-The **Settings** card changes options without editing `.env` or restarting: update-check interval, caches and limits, and similar. Each row shows where its value comes from (saved, environment or default). A value saved here beats the environment variable; **Reset** removes it. Every replica reads the shared settings file, so a change applies within a few seconds. Rows marked "applies after a restart" are read once at start. The admin password, ports, replica count and other Docker settings stay in `.env` or the compose file, because the service cannot change its own container.
+The **Settings** card changes options without editing `.env.compose`, `.env` or restarting: update-check interval, caches and limits, and similar. Each row shows where its value comes from (saved, environment or default). A value saved here beats the environment variable; **Reset** removes it. Every replica reads the shared settings file, so a change applies within a few seconds. Rows marked "applies after a restart" are read once at start. The admin password, ports, replica count and other Docker settings stay in `.env` or the compose file, because the service cannot change its own container.
 
 ## Settings on the admin page
 
