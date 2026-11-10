@@ -7,7 +7,7 @@ import hashlib
 import json
 import time
 from typing import Any, AsyncIterator
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -24,6 +24,7 @@ class OllamaClient:
     def __init__(self, url: str, model: str, timeout: float = 120.0, keep_alive: str = "30m",
                  transport: httpx.AsyncBaseTransport | None = None) -> None:
         self.model = model
+        self.same_machine = urlparse(url).hostname in ("127.0.0.1", "localhost", "::1")  # Ollama runs where this service sees the memory
         self.num_thread: int | None = None  # CPU threads Ollama uses per request; None = Ollama decides
         self._keep_alive = keep_alive
         self._timeout = timeout
@@ -99,6 +100,13 @@ class OllamaClient:
     def digest(self, name: str) -> str | None:
         """The digest Ollama listed for `name` at the last inventory lookup, or None."""
         return self._digests.get(name) or self._digests.get(f"{name}:latest") or None
+
+    async def downloaded(self) -> set[str]:
+        """Ollama model names on disk; empty when Ollama cannot be reached."""
+        try:
+            return set(await self.installed_models(0))
+        except OllamaError:
+            return set()
 
     async def model_ready(self) -> bool:
         """True when Ollama answers and has the model pulled."""

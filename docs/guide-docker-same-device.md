@@ -24,7 +24,7 @@ the API replicas sit behind nginx.
    count (compose default 4). For another quantisation set `SERVICE_OLLAMA_MODEL=hf.co/openbmb/MiniCPM5-2B-GGUF:Q8_0`.
 2. Start:
    ```bash
-   docker compose up -d --build
+   docker compose --env-file .env.compose up -d --build
    ```
    Order: `cnv_minicpm52b_model` starts, then `cnv_minicpm52b_model_lb`.
 3. Check:
@@ -82,7 +82,7 @@ increase it only if RAM permits keeping more models loaded.
 | `SERVICE_TOKENS_FILE` | `tokens.json` | Token storage; Docker uses `/data/tokens.json` in the `cnv_minicpm52b_model_data` volume. Saved settings live beside it. |
 | `SERVICE_WEB_DIR` | repository `web/` | Admin static files; Docker uses `/app/web`. |
 
-Set Compose variables in the shell or a local `.env` beside `docker-compose.yml`. Do not expose the service
+Set Compose variables in the shell or a local `.env.compose` (start with `--env-file .env.compose`) beside `docker-compose.yml`. Do not expose the service
 without setting an admin password. Create a separate project token for each caller in `/admin/` and send it
 as `X-Internal-Token`. The admin password is only for admin routes.
 
@@ -119,7 +119,7 @@ or join that network and call `http://cnv_minicpm52b_model_lb:29200`. Ollama's p
 docker compose ps
 docker compose logs -f cnv_minicpm52b_model ollama
 docker compose down      # keeps the ollama volume (model) and tokens volume
-SERVICE_REPLICAS=3 docker compose up -d --build && docker compose restart cnv_minicpm52b_model_lb   # scale
+SERVICE_REPLICAS=3 docker compose --env-file .env.compose up -d --build && docker compose restart cnv_minicpm52b_model_lb   # scale
 ```
 
 ## Problems

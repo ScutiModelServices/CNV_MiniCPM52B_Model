@@ -25,6 +25,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 
+import hardware
+import variants
 from disconnect import CallerGone, Measure, first_piece
 from cache import AnswerCache
 from ollama import OllamaClient, OllamaError
@@ -104,6 +106,10 @@ class NewToken(BaseModel):
 class TokenScope(BaseModel):
     projects: list[Annotated[str, Field(pattern=PROJECT_PATTERN)]] | None = Field(None, max_length=32)
     rate: int | None = Field(None, ge=1, le=100_000)
+
+
+class VariantChoice(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
 
 
 class Threads(BaseModel):
@@ -409,6 +415,33 @@ def create_app(client: OllamaClient | None = None, admin_password: str | None = 
         settings.save(tokens.settings_path, num_thread=body.num_thread)
         return {"num_thread": client.num_thread}
 
+    async def variant_rows() -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+        """What this machine has (None when Ollama is on another machine) and every quantization with its estimate and
+        whether it fits. Read when asked, never cached."""
+        hw = await asyncio.to_thread(hardware.probe) if client.same_machine else None
+        return hw, variants.listing(hw, client.model, await client.downloaded())
+
+    @app.get("/admin/variants", dependencies=[Depends(admin)])
+    async def list_variants() -> dict[str, Any]:
+        hw, rows = await variant_rows()
+        return {"hardware": hw, "summary": hardware.describe(hw), "variants": rows, "estimate": "Estimated from the file size; not measured."}
+
+    @app.put("/admin/variant", dependencies=[Depends(admin)])
+    async def choose_variant(body: VariantChoice) -> dict[str, Any]:
+        """Saves the Ollama model name. It is read at start, so a restart applies it."""
+        if config is None:
+            raise HTTPException(409, "Settings are fixed in this setup")
+        row = variants.find((await variant_rows())[1], body.id)
+        if row is None:
+            raise HTTPException(404, "No such variant.")
+        if row["fits"] is False:
+            raise HTTPException(409, row["reason"])
+        try:
+            config.set({"model": row["model"]})
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+        return {"saved": row["id"], "restart_required": not row["current"], "downloaded": row["downloaded"]}
+
     @app.get("/admin/workers", dependencies=[Depends(admin)])
     def workers() -> dict[str, Any]:
         """Read-only: replicas and Ollama's parallel requests are Docker Compose settings the service cannot change."""
@@ -493,13 +526,12 @@ def main() -> None:
 
     import uvicorn
 
-    if "--dotenv" in sys.argv[1:]:  # run.bat asks for it; a plain `python src/app.py` and Docker never read .env
-        env_file = Path(__file__).resolve().parents[1] / ".env"
-        if env_file.is_file():
-            names = settings.load_env_file(env_file)
-            print(f".env: loaded {', '.join(names) or 'no variables'} (names only; a real environment variable wins)", flush=True)
-        else:
-            print(".env: no file in the service folder", flush=True)
+    if "--dotenv" in sys.argv[1:]:  # run.bat asks for it; a plain `python src/app.py` and Docker never read .env files
+        loaded = settings.load_env_files(Path(__file__).resolve().parents[1])
+        for name, names in loaded.items():
+            print(f"{name}: loaded {', '.join(names) or 'no variables'} (names only; a real environment variable wins)", flush=True)
+        if not loaded:
+            print(".env.local / .env: no file in the service folder", flush=True)
 
     store = TokenStore(os.environ.get("SERVICE_TOKENS_FILE", "tokens.json"))
     config = settings.Config(store.settings_path, SETTINGS)
