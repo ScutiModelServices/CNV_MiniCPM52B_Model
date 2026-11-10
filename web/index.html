@@ -500,6 +500,39 @@ const storageKey = CONFIG.title + ":admin";
 let admin = "", session = new AbortController(), poll, polling = false, initializedThreads = false;
 let tokenRows = [], pendingRevoke = null, pendingEdit = null, settingRows = [], settingsTimer, savedTimer, copyTimer, tokenVersion = 0;
 const playground = Playground.mount($("playground"), CONFIG.playground, {secrets: () => [admin]});
+/* The playground signs in with a temporary token made from this admin session (revoked on sign-out); no pasting. */
+const PLAYGROUND_TOKEN = "playground (temporary)";
+let playgroundToken = "", playgroundTokenId = "", playgroundMint = null;
+{
+  const field = $("pg-token").closest(".pg-field");
+  field.hidden = true;
+  if (field.nextElementSibling?.classList.contains("description")) field.nextElementSibling.hidden = true;
+}
+function fillPlaygroundToken() { if (playgroundToken) $("pg-token").value = playgroundToken; }
+function autoLoadChoices() {
+  const load = $("pg-load");
+  if (load && $("pg-token").value && !load.disabled && !$("pg-send").disabled) load.click();
+}
+function ensurePlaygroundToken() {
+  playgroundMint ??= (async () => {
+    try {
+      for (const row of (await call("GET", "tokens")).tokens) if (row.name === PLAYGROUND_TOKEN) await call("DELETE", "tokens/" + encodeURIComponent(row.id)); // left by a closed tab
+      const made = await call("POST", "tokens", {name: PLAYGROUND_TOKEN, expires_days: 1});
+      playgroundToken = made.token; playgroundTokenId = made.id;
+      fillPlaygroundToken(); autoLoadChoices(); await refreshTokens();
+    } catch (error) { playgroundMint = null; report(error, "page-error"); }
+  })();
+}
+function dropPlaygroundToken() {
+  if (playgroundTokenId && admin) fetch("../admin/tokens/" + encodeURIComponent(playgroundTokenId), {method: "DELETE", headers: {"X-Internal-Token": admin}, keepalive: true}).catch(() => {});
+  playgroundToken = ""; playgroundTokenId = ""; playgroundMint = null;
+}
+{
+  const reset = playground.reset.bind(playground);
+  playground.reset = () => { reset(); fillPlaygroundToken(); };
+  new MutationObserver(autoLoadChoices).observe($("pg-fields"), {childList: true});
+  window.addEventListener("pagehide", dropPlaygroundToken);
+}
 let theme = "system";
 try { theme = localStorage.getItem("admin-theme") || "system"; } catch {}
 if (!["system", "light", "dark"].includes(theme)) theme = "system";
@@ -585,6 +618,7 @@ function forgetToken() {
   clearTimeout(copyTimer);
 }
 function signOut(focus = true) {
+  dropPlaygroundToken();
   playground.reset();
   session.abort();
   session = new AbortController();
@@ -1153,6 +1187,7 @@ async function signIn(password) {
     $("signin").hidden = true;
     $("dashboard").hidden = false;
     $("signout").focus();
+    ensurePlaygroundToken();
     await Promise.all([refreshHealth(), refreshWorkers().catch(error => report(error, "page-error")), refreshUpdates().catch(error => report(error, "page-error")), refreshVoices().catch(error => report(error, "page-error")), refreshVariants().catch(error => report(error, "page-error")), refreshSettings().catch(error => report(error, "page-error"))]);
     if (admin) poll = setInterval(pollStatus, 10000);
   } catch (error) {
